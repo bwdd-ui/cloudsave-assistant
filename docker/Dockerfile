@@ -15,9 +15,10 @@ RUN add-pkg libnss3 libatk1.0-0 libatk-bridge2.0-0 libdrm2 libxkbcommon0 \
     && mkdir -p /opt/cloudsave /output
 COPY --from=application /out/ /opt/cloudsave/
 COPY docker/startapp.sh /startapp.sh
+COPY docker/55-cloudsave.sh /etc/cont-init.d/55-cloudsave.sh
 COPY docker/container-entry.cjs /opt/cloudsave/container-entry.cjs
 COPY docker/smoke.cjs /opt/cloudsave/smoke.cjs
-RUN chmod 755 /startapp.sh /opt/cloudsave/electron/electron \
+RUN chmod 755 /startapp.sh /etc/cont-init.d/55-cloudsave.sh /opt/cloudsave/electron/electron \
     && chown root:root /opt/cloudsave/electron/chrome-sandbox \
     && chmod 4755 /opt/cloudsave/electron/chrome-sandbox \
     && set-cont-env APP_NAME 'CloudSave 云存助手' \

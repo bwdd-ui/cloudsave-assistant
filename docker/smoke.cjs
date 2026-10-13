@@ -14,6 +14,7 @@ app.whenReady().then(async () => {
   }
   assert(win, 'Application window must load');
   assert.equal(app.getPath('userData'), '/config/Data');
+  fs.writeFileSync('/output/docker-export-test.txt', 'export-directory-writable');
   const dom = await win.webContents.executeJavaScript(`({text:document.body.innerText, api:typeof window.cloudsave})`);
   assert(dom.text.includes('不太灵'), 'Main resource navigation must render');
   assert.equal(dom.api, 'object', 'Preload bridge must load');

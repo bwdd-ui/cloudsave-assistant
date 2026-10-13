@@ -8,5 +8,6 @@
 !docker/
 !docker/Dockerfile
 !docker/startapp.sh
+!docker/55-cloudsave.sh
 !docker/container-entry.cjs
 !docker/smoke.cjs
