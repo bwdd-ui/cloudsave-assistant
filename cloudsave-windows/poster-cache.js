@@ -1,0 +1,9 @@
+const fs=require('fs'),path=require('path'),crypto=require('crypto');
+class PosterCache{
+ constructor({root,fetcher=fetch,limit=4,ttl=30*86400000}){Object.assign(this,{root,fetcher,limit,ttl});this.running=0;this.waiting=[];this.pending=new Map();}
+ async load(url,site='butailing',origin='https://www.0bt0.com'){
+  const bases={btbtla:'https://www.btbtla.com',jying:'https://jying.top',qmp4:'https://www.qmp4.com',guanying:'https://www.xn--wcv59z.com',butailing:origin};const base=bases[site] || origin,target=new URL(url,base);if(!['https:','http:'].includes(target.protocol)||target.username||target.password)throw Error('封面地址无效');const key=crypto.createHash('sha256').update(target.href).digest('hex'),file=path.join(this.root,key+'.json');try{const stat=fs.statSync(file);if(Date.now()-stat.mtimeMs<this.ttl)return JSON.parse(fs.readFileSync(file,'utf8')).data;}catch(_){}if(this.pending.has(key))return this.pending.get(key);
+  const task=(async()=>{if(this.running>=this.limit)await new Promise(r=>this.waiting.push(r));this.running++;try{let last;for(const ref of [null,base+'/']){try{const r=await this.fetcher(target.href,{signal:AbortSignal.timeout(12000),headers:{'User-Agent':'Mozilla/5.0',...(ref?{Referer:ref}:{})}});if(!r.ok)throw Error('封面HTTP '+r.status);const type=(r.headers.get('content-type') || '').split(';')[0];if(!type.startsWith('image/')||Number(r.headers.get('content-length'))>5242880)throw Error('封面格式或大小无效');const bytes=Buffer.from(await r.arrayBuffer());if(bytes.length>5242880||!bytes.length)throw Error('封面大小无效');const data='data:'+type+';base64,'+bytes.toString('base64');fs.mkdirSync(this.root,{recursive:true});const tmp=file+'.tmp';fs.writeFileSync(tmp,JSON.stringify({url:target.href,data}));fs.renameSync(tmp,file);return data;}catch(e){last=e;}}throw last;}finally{this.running--;this.waiting.shift()?.();}})();this.pending.set(key,task);try{return await task;}finally{this.pending.delete(key);}
+ }
+}
+module.exports={PosterCache};

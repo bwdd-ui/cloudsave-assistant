@@ -1,0 +1,15 @@
+const {app,BrowserWindow}=require('electron'),path=require('path'),fs=require('fs'),assert=require('assert/strict');
+app.setPath('userData','C:/Temp/full-minute-ui-'+process.pid);
+app.whenReady().then(async()=>{const w=new BrowserWindow({show:false,width:1500,height:1000,webPreferences:{preload:path.join(__dirname,'five-sites-ui-mock.cjs'),contextIsolation:true,offscreen:true}});const run=s=>w.webContents.executeJavaScript(s),pause=()=>new Promise(r=>setTimeout(r,200));let step='load';try{
+ await w.loadFile(path.join(__dirname,'../index.html'));await pause();
+ step='full button';await run("document.getElementById('showOfflineTasks').click()");await pause();assert(await run("Boolean(document.getElementById('cloudSyncFull'))"));await run("document.getElementById('cloudSyncFull').click()");await pause();assert.equal(await run("window.cloudsave.testCalls().filter(x=>x[0]==='syncCloudDownloads').at(-1)[1].mode"),'full');await run("document.getElementById('cloudSyncNow').click()");await pause();assert.equal(await run("window.cloudsave.testCalls().filter(x=>x[0]==='syncCloudDownloads').at(-1)[1].mode"),'incremental');
+ for(const [nav,prefix,field,save,call] of [['showMonitorFilter','monitor','monitorWithinMinutes','saveMonitorFilters','setMonitor'],['showGuanyingMonitor','gy','gyMinutes','gySaveMonitor','guanyingMonitorSave'],['showBtbtlaMonitor','bt','btMinutes','btSaveMonitor','btbtlaMonitorSave'],['showJyingMonitor','jy','jyMinutes','jySaveMonitor','jyingMonitorSave'],['showQmp4Monitor','qm','qmMinutes','qmSaveMonitor','qmp4MonitorSave']]){
+  step=prefix;await run(`document.getElementById('${nav}').click()`);await pause();
+  await run(`document.getElementById('${prefix}DateMode').value='minutes';document.getElementById('${prefix}DateMode').dispatchEvent(new Event('change'));document.getElementById('${field}').value='17';`);
+  assert(await run(`document.getElementById('${prefix}DateMode').value==='minutes'`));assert(await run(`getComputedStyle(document.getElementById('${field}').closest('label')).display!=='none'&&!document.getElementById('${field}').closest('label').hidden`));
+  await run(`document.getElementById('${save}').click()`);await pause();
+  const raw=await run(`window.cloudsave.testCalls().filter(x=>x[0]==='${call}').at(-1)`);assert(raw,'save call '+call);const value=raw[1]?.[0]||raw[1],options=value.options||value.filters;assert.equal(options.dateMode,'minutes');assert.equal(options.withinMinutes,17);
+ }
+ await run("cloudSyncState={running:true,progress:{mode:'full',phase:'reading',page:2,pages:35,fetchedCount:200}};renderCloudSyncStatus()");assert(await run("document.getElementById('cloudSyncFull').disabled&&document.getElementById('cloudSyncNow').disabled"));assert((await run("document.getElementById('cloudDownloadSyncStatus').textContent")).includes('第2/35页'));
+ fs.writeFileSync('C:/Temp/windows-full-minute-ui.txt','PASS full/incremental button mode, five monitor minute controls visible and saved, full-scan progress and single-flight buttons');app.exit(0);
+}catch(e){fs.writeFileSync('C:/Temp/windows-full-minute-ui.txt',step+'\n'+e.stack);app.exit(1);}});

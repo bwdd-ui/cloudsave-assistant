@@ -1,0 +1,17 @@
+node_modules/
+dist/
+Data/
+data/
+*.log
+*.exe
+*.apk
+*.fpk
+*.zip
+*.asar
+.env
+.env.*
+*.pem
+*.key
+privacy-scan.json
+.publish-tools/
+release-assets/

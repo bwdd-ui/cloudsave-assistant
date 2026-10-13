@@ -1,0 +1,13 @@
+const assert=require('assert/strict'),{Share115Monitor}=require('../share115-monitor');
+(async()=>{
+ let release,entered;const gate=new Promise(r=>release=r),ready=new Promise(r=>entered=r);const seen=[],posted=[];
+ const d={read:()=>null,write:async()=>{},cookie:()=>'',account:async()=>({uid:'u'}),validateFolder:async()=>{},stopped:()=>false,wait:async()=>{},log(){},adapter:async site=>({filters:{},categories:['mv'],catalog:async()=>({items:[{id:site,title:site}],hasNext:false}),detail:async()=>{seen.push(site);if(site==='jying'){entered();await gate;}return {clouds:[{url:'https://115.com/s/'+(site==='jying'?'aaaaa':'bbbbb')}]};}}),provider:{list:async()=>[{id:'1'}],receive:async s=>posted.push(s.shareCode)}};
+ const m=new Share115Monitor(d);m.data.tasks=['jying','qmp4'].map((site,i)=>({id:site,name:site,site,uid:'u',folder:{cid:String(i+1),name:site},intervalMinutes:15}));
+ const first=m.run('jying');await ready;assert.strictEqual(m.run('jying'),first);const second=m.run('qmp4');await second;assert.deepEqual(posted,['bbbbb']);assert(m.state().tasks.find(t=>t.id==='jying').running);release();await first;assert.equal(posted.length,2);m.close();
+ // Concurrent copies of the same link acquire a common lock before reading or sending.
+ let unlock,reads=0,writes=0;const hold=new Promise(r=>unlock=r);const n=new Share115Monitor({...d,adapter:async()=>({filters:{},categories:['mv'],catalog:async()=>({items:[{id:'same'}],hasNext:false}),detail:async()=>({clouds:[{url:'https://115.com/s/same1'}]})}),provider:{list:async()=>{reads++;await hold;return [{id:'1'}];},receive:async()=>writes++}});
+ n.data.tasks=m.data.tasks;const jobs=[n.run('jying'),n.run('qmp4')];assert.equal(n.state().runningIds.length,2);await new Promise(r=>setImmediate(r));assert.equal(reads,1);unlock();await Promise.all(jobs);assert.equal(writes,1);assert.equal(n.linkLocks.size,0);n.close();
+ // A cooldown preserves current movie offset and schedules only that task for retry.
+ let details=0;const retryAt=Date.now()+3600000;const r=new Share115Monitor({...d,adapter:async()=>({filters:{},categories:['mv'],catalog:async()=>({items:[{id:'one'},{id:'two'}],hasNext:false}),detail:async()=>{details++;throw Object.assign(Error('临时冷静期'),{rateLimited:true,retryAt});}})});r.data.tasks=[{...m.data.tasks[0],cursor:{}}];await r.run('jying');assert.equal(details,1);assert.equal(r.data.tasks[0].cursor.cont.offsets.mv,0);assert.equal(r.data.tasks[0].nextRun,retryAt+1000);r.close();
+ console.log('PASS independent task concurrency and same-task lock, common link lock prevents duplicate parallel transfers, per-task cooldown preserves position and next retry');
+})().catch(e=>{console.error(e);process.exitCode=1;});

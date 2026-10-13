@@ -1,0 +1,19 @@
+const assert=require('node:assert/strict'),{harness,magnet}=require('./test-local-only.cjs');
+(async()=>{
+ const cookie='UID=123;CID=x;SEID=y';
+ async function make(options={}){const h=harness(options);h.setCookie(cookie);h.ctx.__snapshot=[{key:h.ctx.magnetKey(magnet),infoHash:'a'.repeat(40),state:'completed',fileId:'888'}];require('node:vm').runInContext('cloudDownloadCache.snapshot=()=>__snapshot',h.ctx);await h.ctx.submitMagnet(cookie,magnet,'42');return h;}
+ let h=await make();await h.ctx.repairCachedOfflinePlacements();assert.equal(h.calls.filter(x=>x.url.includes('files/move')).length,1);assert.equal(h.config().offlinePlacementPending.length,0);assert.equal(h.config().submitHistory[0].status,'success');assert(!h.calls.some(x=>/task_lists|get_user_task/.test(x.url)));await h.ctx.repairCachedOfflinePlacements();assert.equal(h.calls.filter(x=>x.url.includes('files/move')).length,1);
+ h=await make({parent:'42'});await h.ctx.repairCachedOfflinePlacements();assert(!h.calls.some(x=>x.url.includes('files/move')));assert.equal(h.config().submitHistory[0].status,'success');
+ h=await make({parent:'77'});await h.ctx.repairCachedOfflinePlacements();assert(!h.calls.some(x=>x.url.includes('files/move')));assert.equal(h.config().submitHistory[0].status,'success');assert.equal(h.config().offlinePlacementPending.length,0);
+ h=await make({switchBeforeMove:true});await h.ctx.repairCachedOfflinePlacements();assert(!h.calls.some(x=>x.url.includes('files/move')));assert.equal(h.config().offlinePlacementPending.length,1);
+ h=await make();h.ctx.__snapshot=[{key:h.ctx.magnetKey(magnet),infoHash:'b'.repeat(40),state:'completed',fileId:'888'}];await h.ctx.repairCachedOfflinePlacements();assert(!h.calls.some(x=>x.url.includes('files/get_info')||x.url.includes('files/move')));
+ h=await make({moveFailure:true});await h.ctx.repairCachedOfflinePlacements();assert.equal(h.config().offlinePlacementPending.length,1);assert(h.config().offlinePlacementPending[0].nextCheckAt>Date.now());
+ // Scraping/moving after download may invalidate the original ID. End the check, not the download.
+ h=await make();const original=h.ctx.apiRequest;h.ctx.apiRequest=async(url,options)=>{if(url.includes('files/get_info'))throw Error('文件（夹）不存在或已经删除。');return original(url,options);};await h.ctx.repairCachedOfflinePlacements();assert.equal(h.config().offlinePlacementPending.length,0);assert.equal(h.config().submitHistory[0].status,'success');assert.equal(h.config().offlinePlacementResolved['123|'+h.ctx.magnetKey(magnet)].resolution,'unavailable');
+ const before=h.calls.length;await h.ctx.repairCachedOfflinePlacements();assert.equal(h.calls.length,before,'settled records never query or move after external organization');
+ // An older pending duplicate cannot reintroduce a settled hash into the queue.
+ h.ctx.recordSubmitHistory(magnet,'pending','旧副本','42',{uid:'123'});await h.ctx.repairCachedOfflinePlacements();assert.equal(h.config().offlinePlacementPending.length,0);assert.equal(h.calls.length,before);
+ // Reconstruct the queue for older pending submissions from local history only.
+ h=await make();h.ctx.readConfig=()=>({...h.config(),offlinePlacementPending:[]});await h.ctx.repairCachedOfflinePlacements();assert(h.calls.some(x=>x.url.includes('files/move')));
+ console.log('PASS durable target queue, cached completed output root correction, correct folder no move, other folder/hash/account protection, retry on failure and old pending migration without full-list scan');
+})().catch(e=>{console.error(e);process.exitCode=1});

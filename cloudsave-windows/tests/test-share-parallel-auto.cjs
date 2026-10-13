@@ -1,0 +1,6 @@
+const assert=require('assert/strict'),{Share115Monitor}=require('../share115-monitor');
+(async()=>{let enter,release,done;const entered=new Promise(r=>enter=r),hold=new Promise(r=>release=r),copied=new Promise(r=>done=r);
+ const m=new Share115Monitor({read:()=>null,write:async()=>{},cookie:()=>'',account:async()=>({uid:'u'}),validateFolder:async()=>{},stopped:()=>false,wait:async()=>{},log(){},adapter:async site=>({filters:{},categories:['mv'],catalog:async()=>({items:[{id:site}],hasNext:false}),detail:async()=>{if(site==='jying'){enter();await hold;}return {clouds:[{url:'https://115.com/s/'+(site==='jying'?'aaaaa':'bbbbb')}]};}}),provider:{list:async()=>[{id:'1'}],receive:async s=>{if(s.shareCode==='bbbbb')done();}}});
+ m.data.tasks=['jying','qmp4'].map((site,i)=>({id:site,site,name:site,uid:'u',folder:{cid:String(i+1),name:site},intervalMinutes:15,enabled:true,nextRun:0}));
+ const first=m.run('jying');await entered;let timer;await Promise.race([copied,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('Other due task was blocked by running Jying task')),4000))]).finally(()=>clearTimeout(timer));assert(m.runs.has('jying'));release();await first;await m.running;m.close();console.log('PASS automatic scheduler starts another due resource-library task while Jying remains running');
+})().catch(e=>{console.error(e);process.exitCode=1;});

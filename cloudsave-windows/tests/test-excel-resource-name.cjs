@@ -1,0 +1,13 @@
+const assert=require('assert/strict'),fs=require('fs'),tools=require('../scan-export');
+const row=tools.exportRow({url:'magnet:?xt=urn:btih:'+'a'.repeat(40),title:'English.Release',size:'12.68 GB',date:'2026-10-11',raw:{filename:'Different.File.mkv',duration:'90分钟',resolution:'1920x1080',frameRate:'24 FPS',video:'AVC',audio:'AAC'}},{id:'1',title:'海报中文片名',genre:'剧情',country:'中国',releaseDate:'2026-01-02'});
+assert.deepEqual(tools.HEADERS,['名称','资源大小','上映时间','磁力链接','磁力名称','时长','分辨率','帧率','视频','音频','类型','制片国家/地区']);
+assert.deepEqual(tools.rowValues(row),['海报中文片名','12.68 GB','2026-01-02',row.url,'English.Release','90分钟','1920x1080','24 FPS','AVC','AAC','剧情','中国']);
+assert.equal(tools.rowValues(tools.exportRow({raw:{zsize:'850 MB'}},{}))[1],'850 MB');
+assert.equal(tools.rowValues({sizeGB:1.25})[1],'1.25 GB');
+assert.equal(tools.rowValues({})[1],'');
+assert.equal(tools.rowValues({media:{filename:'Fallback.mkv'}})[4],'Fallback.mkv');
+const main=fs.readFileSync(require('path').join(__dirname,'../main.js'),'utf8');
+assert(main.includes('const headers=[...tools.HEADERS];'));
+assert(main.includes('const values=rows.map(item=>tools.rowValues(item.exportRecord));'));
+fs.writeFileSync('C:/Temp/resource-name-export-test.xlsx',tools.buildXlsx([row]));
+console.log('PASS all 12 export headers and values match requested order; magnet title takes priority over media filename; actual workbook generated');

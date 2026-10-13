@@ -1,0 +1,36 @@
+const fs=require('fs'), vm=require('vm'), assert=require('assert/strict');
+const source=fs.readFileSync('C:/Temp/test-scan-excel.cjs','utf8');
+const prefix=source.slice(0,source.indexOf('const magnet ='));
+const ctx=vm.createContext({require,console,Buffer,process,setTimeout,setInterval,clearInterval,URL,URLSearchParams});
+vm.runInContext(prefix+';globalThis.harness=harness;',ctx);
+const harness=ctx.harness;
+const tools=require('E:/Deliverables/cloudsave-auto-save-1.20.11-final-20260921/cloudsave-windows/scan-export.js');
+const mag=n=>'magnet:?xt=urn:btih:'+String(n).padStart(40,'0');
+const code=`General\nComplete name : C:\\Films\\Test.mkv\nDuration : 2 h 14 min\nVideo\nFormat : HEVC\nHDR format : HDR10\nBit rate : 4 496 kb/s\nWidth : 3 840 pixels\nHeight : 1 608 pixels\nDisplay aspect ratio : 2.40:1\nFrame rate mode : Constant\nFrame rate : 60.000 FPS\nAudio #1\nFormat : DTS\nCommercial name : DTS-HD Master Audio\nChannel(s) : 6 channels\nBit rate : 768 kb/s\nLanguage : Chinese\nAudio #2\nFormat : AAC LC\nChannel(s) : 2 channels\nBit rate : 192 kb/s\nLanguage : Chinese`;
+(async()=>{
+ const m=tools.parseMedia({zcode:code}); assert.equal(m.filename,'Test.mkv');assert.equal(m.duration,'2 h 14 min');assert.equal(m.resolution,'3 840 x 1 608 (2.40:1)');assert.equal(m.frameRate,'60.000 FPS');assert(m.video.includes('HEVC @ 4 496 kb/s'));assert.equal(m.audio.split('\n').length,2);assert(!m.frameRate.includes('Constant'));
+ const actual=require('C:/Temp/cloudsave-public-getVideoDetail.json').data;
+ const h=harness({monitor:{enabled:true,seen:[],filters:{dateMode:'range',startDate:'2026-10-01',endDate:'2026-10-05',maxItems:30,compareSize:true}}});
+ assert.notEqual(h.run('monitorScanSignature({...monitorConfig().filters,maxItems:30})'),h.run('monitorScanSignature({...monitorConfig().filters,maxItems:100})'));
+ const calls=[]; h.ctx.fetchCloudCatalog=async(mode,page)=>{calls.push(mode+page);return {total:10000,limit:2,items:mode==='movie'?[{id:'1',title:'New'},{id:'2',title:'Old'}]:[]};};
+ h.ctx.fetchMovieDetail=async id=>({doub_id:id,title:'Film',seed_updated_at:id==='1'?'2026-10-04 00:00:00':'2026-09-30 23:59:59',all_seeds:id==='1'?[{id:'77',zname:'Test',zlink:mag(1),zsize:'3GB',ezt:'2026-10-04 00:00:00'}]:[]});
+ // Empty modes must advertise an empty result, not an inconsistent artificial total.
+ const catalog=h.ctx.fetchCloudCatalog;h.ctx.fetchCloudCatalog=async(mode,page)=>mode==='tv'?(calls.push(mode+page),{total:0,limit:2,items:[]}):catalog(mode,page);
+ await h.run('scanMonitorCatalog(monitorConfig())'); assert.deepEqual(calls,['movie1','tv1']);assert.equal(h.run('scanExportSnapshot().rows.length'),1);assert.equal(h.get().monitorScan.version,4);
+ assert.equal(h.run('normalizeMovie('+JSON.stringify(actual)+').releaseDate'),actual.release);
+ const old=harness();old.run('scanExportCache={signature:"same",complete:true,rows:[{url:"'+mag(1)+'",title:"Test",movieId:"36452545",media:{}}]}');
+ old.ctx.fetchMovieDetail=async()=>({...actual,ecca:{'WEB-4K':[{id:77,zlink:mag(1),zname:'Test',zsize:'3GB',ezt:'2026-10-04'}]}});
+ const requests=[];old.ctx.apiRequest=async url=>{requests.push(url);return {success:true,code:200,data:{zcode:code,zlink:mag(1)}}};
+ const output=await old.run('exportScannedMagnets(true)');assert.equal(output.missing,0);assert(requests[0].includes('getTrDetail'));assert(requests[0].includes('id=77'));assert.equal(old.run('scanExportSnapshot().rows[0].releaseDate'),actual.release);fs.writeFileSync('C:/Temp/cloudsave-fixed-media.xlsx',old.run("fs.readFileSync('C:/Temp/mock-export.xlsx')"));
+ const denied=harness();denied.run('scanExportCache={signature:"same",complete:true,rows:[{url:"'+mag(2)+'",title:"Denied",seedId:"88",movieId:"1",releaseDate:"2026-01-01",media:{}}]}');denied.ctx.apiRequest=async()=>({success:false,code:500,message:'请开通VIP后查看资源'});
+ const blocked=await denied.run('exportScannedMagnets(true)');assert.equal(blocked.missing,1);assert(blocked.reasons.includes('请开通VIP后查看资源'));
+ const mismatch=harness();mismatch.run('scanExportCache={signature:"same",complete:true,rows:[{url:"'+mag(2)+'",title:"Mismatch",seedId:"88",movieId:"1",releaseDate:"2026-01-01",media:{}}]}');mismatch.ctx.apiRequest=async()=>({success:true,code:200,data:{zcode:code,zlink:mag(3)}});const wrong=await mismatch.run('exportScannedMagnets(true)');assert.equal(wrong.missing,1);assert(wrong.reasons.some(r=>r.includes('不一致')));
+ const q=harness({monitor:{enabled:true,seen:[],filters:{maxItems:1,compareSize:true}}});let checked=[];
+ q.ctx.fetchCloudCatalog=async(mode,page)=>({total:mode==='movie'?100:1,limit:2,items:mode==='movie'?[{id:'1',title:'First'},{id:'2',title:'Older'}]:[{id:'3',title:'Newer TV'}]});
+ q.ctx.fetchMovieDetail=async id=>{checked.push(id);return {doub_id:id,title:'Film',seed_updated_at:id==='2'?'2026-10-02 00:00:00':'2026-10-04 00:00:00',all_seeds:[{id,zname:id==='3'?'Show S01E01':'Film',zlink:mag(id),zsize:'3GB',ezt:id==='3'?'2026-10-04 00:00:00':'2026-10-03 00:00:00'}]};};
+ const selected=await q.run('scanMonitorCatalog(monitorConfig())');assert.deepEqual(checked,['1','2','3']);assert.equal(selected[0].movieId,'3');
+ const unknown=harness({monitor:{enabled:true,seen:[],filters:{dateMode:'range',startDate:'2026-10-01',endDate:'2026-10-05'}}});const unknownPages=[];
+ unknown.ctx.fetchCloudCatalog=async(mode,page)=>{unknownPages.push(mode+page);return {total:mode==='movie'?2:0,limit:1,items:mode==='movie'?[{id:String(page),title:'Film'}]:[]};};unknown.ctx.fetchMovieDetail=async()=>({all_seeds:[]});await unknown.run('scanMonitorCatalog(monitorConfig())');assert(unknownPages.includes('movie2'));
+ const browse=harness();const browsed=[];browse.ctx.fetchCloudCatalog=async(mode,page)=>{browsed.push(page);return {total:1000,limit:2,items:[{id:'1'},{id:'2'}]};};browse.ctx.fetchCloudDetail=async id=>({movie:{seedUpdatedAt:id==='1'?'2026-10-04':'2026-09-30'},seeds:id==='1'?[{date:'2026-10-04'}]:[],clouds:[]});const page=await browse.run("fetchDatedCatalog('movie',1,{dateMode:'range',startDate:'2026-10-01',endDate:'2026-10-05'})");assert.equal(page.total,1);assert.deepEqual(browsed,[1]);
+ console.log('PASS actual release field, MediaInfo sections/multiple audio, date cutoff, cross-mode quota, old export backfill by magnet ID, VIP reasons, wrong-magnet rejection, unknown times continue, resource browsing date cutoff');
+})().catch(e=>{console.error(e);process.exit(1)});

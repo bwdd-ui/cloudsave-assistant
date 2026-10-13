@@ -1,0 +1,13 @@
+const assert=require('assert/strict'),{CloudDownloadCache}=require('../cloud-download-cache');
+(async()=>{let time=Date.now(),phase='full',calls=[],saved;const old={url:'old',state:'completed'},seed={accounts:{u:{tasks:{old},currentKeys:['old']}}};
+ const make=(read=()=>seed)=>new CloudDownloadCache({read,write:x=>saved=structuredClone(x),account:()=> 'u',key:x=>x,now:()=>time,lookbackHours:()=>24,wait:async()=>{},log(){},page:async p=>{calls.push(p);return {page_count:3,tasks:[{url:'task'+p,status:2,add_time:Math.floor((time-(phase==='full'?p*86400000:60000))/1000)}]};}});
+ let c=make();await c.sync(true,{full:true});assert.deepEqual(calls,[1,2,3]);assert.equal(c.data.accounts.u.count,4);assert.equal(c.data.accounts.u.fullSyncedAt,time);assert.equal(c.data.accounts.u.fullReadCount,3);
+ // After restart use the successful full baseline as the incremental checkpoint.
+ time+=3600000;phase='incremental';calls=[];c=make(()=>saved);c.page=async p=>{calls.push(p);return {page_count:3,tasks:[{url:'new',status:1,add_time:(time-60000)/1000},{url:'task1',status:2,add_time:(time-3*86400000)/1000}]}};await c.sync(true);assert.deepEqual(calls,[1]);assert.equal(c.data.accounts.u.count,5);assert.equal(c.data.accounts.u.checkpoint,time-3600000);assert.equal(c.data.accounts.u.fullReadCount,3);
+ const oldCheckpoint=c.data.accounts.u.syncedAt;time+=7*86400000;c.page=async()=>({page_count:3,tasks:[{url:'new-gap',status:1,add_time:(time-3*86400000)/1000},{url:'boundary',status:2,add_time:(oldCheckpoint-3600000)/1000}]});await c.sync(true);assert.equal(c.data.accounts.u.rangeStart,oldCheckpoint-300000,'full baseline must not lose updates after more than 24 hours offline');assert(c.data.accounts.u.tasks['new-gap']);
+ const before=JSON.stringify(c.data);c.page=async p=>{if(p===2)throw Error('page error');return {page_count:3,tasks:[{url:'partial',status:2}]}};await assert.rejects(c.sync(true,{full:true}),/page error/);assert.equal(JSON.stringify(c.data),before);
+ c.page=async()=>({page_count:3,tasks:[]});await assert.rejects(c.sync(true,{full:true}),/空页/);assert.equal(JSON.stringify(c.data),before);
+ c.page=async()=>({tasks:[{url:'missing-pages',status:2}]});await assert.rejects(c.sync(true,{full:true}),/分页总数/);assert.equal(JSON.stringify(c.data),before);
+ let release;c=make(()=>saved);c.page=()=>new Promise(r=>release=r);const running=c.sync(true);await assert.rejects(c.sync(true,{full:true}),/尚未完成/);release({page_count:1,tasks:[]});await running;
+ console.log('PASS manual full scan, cumulative history, durable full baseline reused after restart, failed/empty partial scan preserved, concurrent mode isolation');
+})().catch(e=>{console.error(e);process.exitCode=1});

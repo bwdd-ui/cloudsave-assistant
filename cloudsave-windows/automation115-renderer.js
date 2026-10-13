@@ -1,0 +1,7 @@
+(()=>{const api=window.cloudsave;if(!api.library115)return;
+for(const [site,libraryId,monitorId,label]of [['butailing','cloudHomePage','filterPage','不太灵'],['guanying','guanyingLibraryPage','guanyingMonitorPage','观影'],['btbtla','btbtlaLibraryPage','btbtlaMonitorPage','BT影视'],['jying','jyingLibraryPage','jyingMonitorPage','聚影'],['qmp4','qmp4LibraryPage','qmp4MonitorPage','七味']]){
+ const page=$(libraryId),monitor=$(monitorId);if(!page||!monitor)continue;
+ const shareCard=document.createElement('div');shareCard.className='card';shareCard.style.margin='10px 0';shareCard.innerHTML=`<b>${label} · 自动保存开关</b><div class="row" style="flex-wrap:wrap"><label><input type="checkbox" data-library-magnet="${site}"> 启用本站115磁力自动离线</label><label><input type="checkbox" data-library-share="${site}"> 启用本站网盘保存任务</label></div><p class="sub" data-library-hint>网盘保存任务支持115分享、光鸭分享与磁力；各任务还需分别开启。</p>`;(monitor.querySelector('.filter-shell')||monitor).prepend(shareCard);
+ const magnet=shareCard.querySelector('[data-library-magnet]'),share=shareCard.querySelector('[data-library-share]'),render=s=>{magnet.checked=s.magnet;share.checked=s.share;};api.library115(site).then(render).catch(e=>status(e.message,true));
+ const save=async()=>{magnet.disabled=share.disabled=true;try{render(await api.library115(site,{magnet:magnet.checked,share:share.checked}));shareCard.querySelector('[data-library-hint]').textContent='已保存，仅本站生效';}catch(e){status(e.message,true);api.library115(site).then(render);}finally{magnet.disabled=share.disabled=false;}};shareCard.onchange=save;
+}})();

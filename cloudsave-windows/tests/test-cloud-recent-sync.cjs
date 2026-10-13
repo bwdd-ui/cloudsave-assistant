@@ -1,0 +1,8 @@
+const assert=require('assert/strict'),{CloudDownloadCache}=require('../cloud-download-cache');
+(async()=>{const now=Date.now(),old={url:'magnet:old',state:'completed',title:'历史已完成'},seed={version:1,accounts:{u:{tasks:{'magnet:old':old},currentKeys:['magnet:old']}}};let pages=[],saved=null;
+ const make=(page,read=()=>seed)=>new CloudDownloadCache({read,write:d=>saved=d,account:()=> 'u',page,key:x=>x,log:()=>{},now:()=>now,wait:async()=>{},lookbackHours:()=>24});
+ const c=make(async n=>{pages.push(n);return {page_count:99,tasks:[{url:'magnet:new',status:1,add_time:Math.floor((now-3600000)/1000)},{url:'magnet:failed',status:-1,add_time:Math.floor((now-7200000)/1000)},{url:'magnet:outside',status:2,add_time:Math.floor((now-25*3600000)/1000)}]};});await c.sync(true);assert.deepEqual(pages,[1]);assert.equal(c.state('u','magnet:old'),'completed');assert.equal(c.state('u','magnet:new'),'downloading');assert.equal(c.state('u','magnet:outside'),'unknown');assert.equal(c.data.accounts.u.count,3);assert.equal(c.snapshot('u').length,3);assert.equal(c.data.accounts.u.readCount,2);await c.sync(true);assert.equal(c.data.accounts.u.count,3);assert.equal(c.data.accounts.u.added,0);
+ saved=null;const missing=make(async()=>({tasks:[{url:'magnet:bad',status:2}]}));await assert.rejects(missing.sync(true),/时间缺失/);assert.equal(saved,null);
+ const unsorted=make(async()=>({tasks:[{url:'magnet:a',add_time:(now-7200000)/1000},{url:'magnet:b',add_time:(now-3600000)/1000}]}));await assert.rejects(unsorted.sync(true),/倒序/);
+ console.log('PASS 24-hour cutoff stops pagination, adds recent tasks, preserves historical cache, missing timestamps or bad order never fall back to full scan');
+})().catch(e=>{console.error(e);process.exitCode=1;});

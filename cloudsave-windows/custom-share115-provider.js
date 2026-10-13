@@ -1,0 +1,15 @@
+// Parse public HTML only. Neither scripts nor credentials are passed to this parser.
+function extract(html,kind,url){const doc=new DOMParser().parseFromString(html,'text/html'),base=new URL(url),abs=h=>{try{return new URL(h,base).href;}catch{return '';}},text=n=>(n?.textContent||'').replace(/\s+/g,' ').trim(),clouds=[],seen=new Set();
+ const date=n=>{const t=n?.querySelector('time,[datetime],.date,.time,.update-time');return t?.getAttribute('datetime')||text(t)||text(n).match(/\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:\s+\d{1,2}:\d{2})?|(?:今天|昨天|前天|刚刚|\d+\s*(?:分钟|小时|天|周|个月|月|年)前)/)?.[0]||'';};
+ for(const a of doc.querySelectorAll('a[href]')){const href=abs(a.getAttribute('href'));if(!/^https?:\/\/(?:www\.)?(?:115\.com|115cdn\.com|anxia\.com|guangyapan\.com|pan\.quark\.cn|pan\.baidu\.com|pan\.xunlei\.com|123pan\.com|123pan\.cn|123865\.com|123684\.com|123912\.com|123952\.com)\/s\/|^https?:\/\/share\.115\.com\/|^https?:\/\/cloud\.189\.cn\/(?:t\/|web\/share)/i.test(href)&&!/^magnet:\?|^ed2k:\/\//i.test(href)||seen.has(href))continue;seen.add(href);const row=a.closest('article,li,tr,.resource-item,.post,.entry')||a.parentElement,raw=text(row),code=raw.match(/(?:提取码|访问码|密码)\s*[:：]?\s*([a-z0-9]{4,12})\b/i)?.[1]||'',size=raw.match(/[\d.]+\s*(?:TB|GB|MB|GiB|MiB)/i)?.[0]||'';clouds.push({url:href,title:a.title||text(a)||doc.title,code,date:date(row),size});}
+ if(kind==='detail')return {raw:{},clouds:clouds.filter(x=>!/^magnet:\?|^ed2k:/i.test(x.url)),seeds:clouds.filter(x=>/^magnet:\?|^ed2k:/i.test(x.url))};
+ const items=[],urls=new Set();if(clouds.length)items.push({id:url+'#shares',title:doc.title||url,webUrl:url,clouds});let next='';
+ for(const a of doc.querySelectorAll('a[href]')){const href=abs(a.getAttribute('href')),label=text(a);let target;try{target=new URL(href);}catch{continue;}if(target.origin!==base.origin)continue;if(a.rel==='next'||/^(下一页|下页|next|next page|›|»|>)$/i.test(label)){next=href;continue;}if(target.href===base.href||urls.has(href)||!label&& !a.querySelector('img')||/^(首页|登录|注册|退出|联系我们|关于|上一页|上页|\d+)$/.test(label)||/\.(?:jpg|png|gif|webp|zip|mp4|torrent)(?:\?|$)/i.test(target.href))continue;const row=a.closest('article,.movie-item,.video-item,.post,.entry,li');if(!row&&!/detail|movie|video|\/\d+\.?html?|\/p\//i.test(target.pathname))continue;urls.add(href);items.push({id:href,title:a.title||label||a.querySelector('img')?.alt||href,webUrl:href});}
+ return {items,nextPath:next,hasNext:Boolean(next)};
+}
+class CustomShare115Provider{
+ constructor(d){this.d=d;}
+ async catalog(category,page,active,task){const url=task.customNextUrl||task.websiteUrl;active();const html=await this.d.html(url,task.websiteUrl);active();return this.d.parse(html,'catalog',url,extract);}
+ async detail(movie,active,task){if(movie.clouds)return {raw:{},clouds:movie.clouds.filter(x=>!/^magnet:\?|^ed2k:/i.test(x.url)),seeds:movie.clouds.filter(x=>/^magnet:\?|^ed2k:/i.test(x.url))};active();const html=await this.d.html(movie.webUrl,task.websiteUrl);active();return this.d.parse(html,'detail',movie.webUrl,extract);}
+}
+module.exports={CustomShare115Provider,extract};

@@ -1,0 +1,5 @@
+const assert=require('assert/strict'),{syncPreferences,CloudSyncSchedule}=require('../cloud-sync-schedule');
+(async()=>{for(const value of [0,-1,1.5,10081,'',NaN,Infinity])assert.throws(()=>syncPreferences({intervalMinutes:value}),/整数分钟/);assert.equal(syncPreferences({intervalMinutes:'7'}).intervalMinutes,7);
+let time=100000,interval=7,enabled=true,next,callback,cleared=0,calls=0,stopped=false;
+const s=new CloudSyncSchedule({now:()=>time,stopped:()=>stopped,state:()=>({enabled,uid:'test',nextSyncAt:100000+interval*60000}),sync:async()=>{calls++;enabled=false;},setTimer:(fn,ms)=>{callback=fn;next=ms;return 10;},clearTimer:()=>cleared++});
+s.arm();assert.equal(next,420000);interval=2;time+=10000;s.arm();assert.equal(next,110000);assert.equal(cleared,1);callback();await new Promise(r=>setImmediate(r));assert.equal(calls,1);assert.equal(s.timer,null);enabled=true;s.arm();stopped=true;callback();await new Promise(r=>setImmediate(r));assert.equal(calls,1);s.close();console.log('PASS strict minute validation, changed interval re-arms from sync checkpoint, disable and shutdown stop scheduler');})();
