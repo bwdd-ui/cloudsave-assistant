@@ -2,7 +2,7 @@
 FROM node:22-bookworm-slim AS application
 WORKDIR /build
 COPY cloudsave-windows/package.json cloudsave-windows/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund && node node_modules/electron/install.js
 COPY cloudsave-windows/ ./
 # Keep only the explicitly declared application files and the Linux runtime.
 RUN node -e "const fs=require('fs');fs.mkdirSync('/out');for(const f of require('./package.json').build.files)fs.copyFileSync(f,'/out/'+f)" \
