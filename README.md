@@ -2,7 +2,7 @@
 
 Windows x64 桌面工具，用于浏览影视资源、按条件采集磁力链接、监控网盘分享更新，以及将符合条件的资源保存到指定网盘文件夹。
 
-本仓库包含 Windows 完整版与 Docker x86-64 版。Windows 安装包包含 Electron 运行时，无需额外安装 Node.js；Docker 版可在 NAS 上独立运行，通过浏览器操作。Android 和飞牛 NAS 的历史 FPK 安装包不包含在此次发布中。
+本仓库包含 Windows 完整版、Docker x86-64 版与飞牛 NAS FPK 版。Windows 安装包包含 Electron 运行时，无需额外安装 Node.js；Docker 版可在 NAS 上独立运行，通过浏览器操作。Android 历史源码暂不包含在此仓库。
 
 Docker 的安装、目录挂载及使用方式见 [Docker 使用说明](docker/README.md)。
 
@@ -59,7 +59,7 @@ node tests/run-tests.cjs
 ## 开发资料
 
 - [架构与移交说明](docs/ARCHITECTURE.md)
-- [本次发布说明](docs/RELEASE-20261012.md)
+- [1.2.0 优化版发布说明](docs/RELEASE-1.2.0.md)
 - `cloudsave-windows` 中包含完整运行源码、锁定依赖清单、测试和各功能开发说明。
 - Excel 列顺序：名称、资源大小、上映时间、磁力链接、磁力名称、时长、分辨率、帧率、视频、音频、类型、制片国家/地区。
 

@@ -20,3 +20,6 @@ fnos/dist/
 privacy-scan.json
 .publish-tools/
 release-assets/
+
+regression-*.txt
+desktop-smoke-*.txt

@@ -2067,7 +2067,7 @@ function createWindow() {
   configureChineseMenu();
   mainWindow = new BrowserWindow({ width: 1440, height: 920, minWidth: 1100, minHeight: 700, backgroundColor: '#f5f7fb', webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling:false } });
   backgroundWindow=require('./background-window').installBackgroundWindow({app,win:mainWindow,Tray,Menu,nativeImage,isQuitting:()=>quittingAfterFlush,read:()=>readConfig().windowBehavior || {},write:value=>{const config=readConfig();config.windowBehavior=value;writeConfig(config);}});
-  mainWindow.loadFile('index.html');
+  mainWindow.loadFile(path.join(__dirname, 'index.html')).catch(error => dialog.showErrorBox('界面加载失败', '请检查程序文件是否完整。\n' + error.message));
   mainWindow.on('closed',()=>{if(process.platform!=='darwin')app.quit();});
 }
 

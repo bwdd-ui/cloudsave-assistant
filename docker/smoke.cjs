@@ -3,7 +3,7 @@ const fs = require('fs');
 const assert = require('assert');
 const result = '/config/docker-smoke.json';
 app.whenReady().then(async () => {
-  // Smoke tests never contact resource websites or real cloud accounts.
+  // Block default browser network requests. No real cloud accounts are configured.
   session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']}, (_details, done) => done({cancel:true}));
   const deadline = Date.now() + 45000;
   let win;
@@ -15,9 +15,10 @@ app.whenReady().then(async () => {
   assert(win, 'Application window must load');
   assert.equal(app.getPath('userData'), '/config/Data');
   fs.writeFileSync('/output/docker-export-test.txt', 'export-directory-writable');
-  const dom = await win.webContents.executeJavaScript(`({text:document.body.innerText, api:typeof window.cloudsave})`);
+  const dom = await win.webContents.executeJavaScript(`({text:document.body.innerText, api:typeof window.cloudsave, ui:typeof window.cloudsaveUI})`);
   assert(dom.text.includes('不太灵'), 'Main resource navigation must render');
   assert.equal(dom.api, 'object', 'Preload bridge must load');
+  assert.equal(dom.ui, 'object', 'Lazy cover runtime must load');
   await win.webContents.executeJavaScript(`window.cloudsave.backgroundSettings({closeToTray:false})`);
   await new Promise(resolve => setTimeout(resolve, 1800));
   assert(fs.existsSync('/config/Data/config.json'), 'Persistent config must exist');

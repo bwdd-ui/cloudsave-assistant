@@ -68,3 +68,9 @@ input[type=checkbox],.filter-panel input[type=checkbox],input[type=range],#btPos
 .main .monitor-top-header,.main .monitor-top-actions,.main .monitor-limits,.main .offline-history-toolbar{flex-wrap:wrap}
 .main .log-message,.main .submission-link-row code{overflow-wrap:anywhere}
 @media(max-width:1000px){.main .settings-account-tiles{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}}
+
+/* Cards share the same keyboard affordance as native buttons. */
+.cloud-poster-card:focus-visible{outline:3px solid #178578;outline-offset:5px;border-radius:12px}
+.cloud-poster-fallback{min-height:100%;line-height:1.6;overflow-wrap:anywhere}
+.cloud-poster img{transition:opacity .18s ease-in}
+@media(prefers-reduced-motion:reduce){.cloud-poster img{transition:none}}
