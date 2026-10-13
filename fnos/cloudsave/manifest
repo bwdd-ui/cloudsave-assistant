@@ -1,5 +1,5 @@
 appname = cloudsave
-version = 1.2.0
+version = 1.2.1
 display_name = 云存助手 NAS
 desc = 资源浏览、磁力采集、网盘保存与分享更新监控。内置完整 x86-64 Docker 镜像，无需安装时联网拉取；支持官方登录窗口和本地历史缓存。
 platform = x86
@@ -14,4 +14,4 @@ desktop_applaunchname = cloudsave.Application
 service_port = 18985
 checkport = true
 ctl_stop = true
-changelog = 1.2.0优化：写入故障自动恢复、缓存刷新退避、115账号同步隔离、七味停止取消、海报按可见区域加载与键盘操作。
+changelog = 1.2.1页面布局优化：分组导航、固定快捷操作、磁力和网盘任务定位、网站筛选折叠、设置返回原页面。

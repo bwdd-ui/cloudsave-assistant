@@ -18,8 +18,8 @@ jobs:
           echo '54b97fa7b70968c4d05c79840f5daeff508957d0bb2062fdb0376d00d9615c93  /tmp/fnpack/fnpack' | sha256sum -c -
           chmod +x /tmp/fnpack/fnpack
           /tmp/fnpack/fnpack --help
-          gh release download v1.2.0-docker --pattern CloudSave-Docker-amd64-1.2.0.tar.gz --dir fnos/cloudsave/app/docker
-          echo '6500f22cd28af0fbdd68da11d0dc54d42df7c8390ebee80b797fee6aaddfb7ae  fnos/cloudsave/app/docker/CloudSave-Docker-amd64-1.2.0.tar.gz' | sha256sum -c -
+          gh release download v1.2.1-docker --pattern CloudSave-Docker-amd64-1.2.1.tar.gz --dir fnos/cloudsave/app/docker
+          echo '3c6834be1a7156cdffe6a88b02293e0a2208678868039bd1e82f422479facccb  fnos/cloudsave/app/docker/CloudSave-Docker-amd64-1.2.1.tar.gz' | sha256sum -c -
       - name: Lifecycle and actual Docker runtime
         run: bash fnos/test-lifecycle.sh
       - name: Official FPK build and archive validation
@@ -30,9 +30,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git archive --format=zip --prefix=cloudsave-assistant/ -o fnos/dist/CloudSave-fnOS-Source-1.2.0.zip HEAD
-          gh release create v1.2.0-fnos --target "$GITHUB_SHA" --latest=false --title '云存助手飞牛 NAS FPK · x86-64 · 1.2.0' --notes-file fnos/RELEASE.md
-          gh release upload v1.2.0-fnos fnos/dist/CloudSave-fnOS-x86-1.2.0.fpk fnos/dist/CloudSave-fnOS-Source-1.2.0.zip fnos/dist/SHA256SUMS.txt fnos/dist/fpk-validation.json fnos/dist/fnos-lifecycle.json fnos/dist/fnos-container.json fnos/dist/fnos-ui.png
+          git archive --format=zip --prefix=cloudsave-assistant/ -o fnos/dist/CloudSave-fnOS-Source-1.2.1.zip HEAD
+          gh release create v1.2.1-fnos --target "$GITHUB_SHA" --latest=false --title '云存助手飞牛 NAS FPK · x86-64 · 1.2.1' --notes-file fnos/RELEASE.md
+          gh release upload v1.2.1-fnos fnos/dist/CloudSave-fnOS-x86-1.2.1.fpk fnos/dist/CloudSave-fnOS-Source-1.2.1.zip fnos/dist/SHA256SUMS.txt fnos/dist/fpk-validation.json fnos/dist/fnos-lifecycle.json fnos/dist/fnos-container.json fnos/dist/fnos-ui.png
       - name: Diagnostic log
         if: failure()
         run: docker logs cloudsave-fnos || true
