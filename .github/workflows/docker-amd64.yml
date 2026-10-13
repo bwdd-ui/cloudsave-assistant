@@ -29,6 +29,7 @@ jobs:
             -v "$PWD/smoke-data:/config" "$IMAGE"
           for i in $(seq 1 90); do
             test -f smoke-data/docker-smoke.json && break
+            test "$(docker inspect cloudsave-smoke --format '{{.State.Running}}')" = true || { docker logs cloudsave-smoke; exit 1; }
             sleep 2
           done
           cat smoke-data/docker-smoke.json
