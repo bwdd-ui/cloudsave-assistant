@@ -32,23 +32,23 @@ jobs:
             test "$(docker inspect cloudsave-smoke --format '{{.State.Running}}')" = true || { docker logs cloudsave-smoke; exit 1; }
             sleep 2
           done
-          cat smoke-data/docker-smoke.json
-          node -e "const r=require('./smoke-data/docker-smoke.json');if(!r.ok||r.uid===0||r.arch!=='x64'||r.secondRun)process.exit(1)"
+          sudo cat smoke-data/docker-smoke.json > release/first-start.json
+          cat release/first-start.json
+          node -e "const r=require('./release/first-start.json');if(!r.ok||r.uid===0||r.arch!=='x64'||r.secondRun)process.exit(1)"
           curl -fk https://127.0.0.1:15800/ -o release/web-entry.html
           docker inspect cloudsave-smoke --format '{{json .State}}' > release/container-state.json
           docker stop -t 90 cloudsave-smoke
-          node -e "const c=require('./smoke-data/Data/config.json');if(c.windowBehavior.closeToTray!==false)process.exit(1)"
-          cp smoke-data/docker-smoke.json release/first-start.json
-          rm smoke-data/docker-smoke.json
+          sudo cat smoke-data/Data/config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8'));if(c.windowBehavior.closeToTray!==false)process.exit(1)"
+          sudo rm smoke-data/docker-smoke.json
           docker start cloudsave-smoke
           for i in $(seq 1 90); do
             test -f smoke-data/docker-smoke.json && break
             sleep 2
           done
-          cat smoke-data/docker-smoke.json
-          node -e "const r=require('./smoke-data/docker-smoke.json');if(!r.ok||!r.secondRun)process.exit(1)"
-          cp smoke-data/docker-smoke.json release/restart-test.json
-          cp smoke-data/docker-smoke.png release/docker-ui.png
+          sudo cat smoke-data/docker-smoke.json > release/restart-test.json
+          cat release/restart-test.json
+          node -e "const r=require('./release/restart-test.json');if(!r.ok||!r.secondRun)process.exit(1)"
+          sudo cat smoke-data/docker-smoke.png > release/docker-ui.png
           docker stop -t 90 cloudsave-smoke
           docker logs cloudsave-smoke > release/container-smoke.log 2>&1
       - name: Save installable image and source
