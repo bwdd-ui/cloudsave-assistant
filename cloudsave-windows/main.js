@@ -2,10 +2,11 @@ const { app, BrowserWindow, ipcMain, safeStorage, session, clipboard, shell, dia
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const portableStorage = app.isPackaged
-  ? require('./portable-storage').createPortableStorage(app, safeStorage, process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath)) : null;
+const persistentRuntime = app.isPackaged || Boolean(process.env?.CLOUDSAVE_STORAGE_ROOT);
+const portableStorage = persistentRuntime
+  ? require('./portable-storage').createPortableStorage(app, safeStorage, process.env.CLOUDSAVE_STORAGE_ROOT || process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath)) : null;
 
-const jsonStore = app.isPackaged ? new (require('./buffered-json').BufferedJson)(1200) : null;
+const jsonStore = persistentRuntime ? new (require('./buffered-json').BufferedJson)(1200) : null;
 let configCache;
 let configCheckedAt = 0;
 let configDiskMtime = 0;

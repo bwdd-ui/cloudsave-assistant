@@ -1,0 +1,12 @@
+**
+!cloudsave-windows/
+!cloudsave-windows/*.js
+!cloudsave-windows/*.json
+!cloudsave-windows/*.html
+!cloudsave-windows/*.css
+!cloudsave-windows/tray-icon.png
+!docker/
+!docker/Dockerfile
+!docker/startapp.sh
+!docker/container-entry.cjs
+!docker/smoke.cjs

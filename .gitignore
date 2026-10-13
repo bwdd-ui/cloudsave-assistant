@@ -10,6 +10,8 @@ data/
 *.asar
 .env
 .env.*
+!**/.env.example
+docker-regression.txt
 *.pem
 *.key
 privacy-scan.json

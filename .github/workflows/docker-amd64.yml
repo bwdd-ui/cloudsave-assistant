@@ -1,0 +1,82 @@
+name: Docker x86-64 build and release
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      IMAGE: cloudsave-assistant:docker-20261013
+      RELEASE: v2026.10.13-docker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Regression tests
+        working-directory: cloudsave-windows
+        run: node tests/run-tests.cjs
+      - name: Build Linux amd64 image
+        run: docker build --platform linux/amd64 -f docker/Dockerfile -t "$IMAGE" .
+      - name: Real container startup and persistence test
+        run: |
+          mkdir -p smoke-data release
+          docker run -d --name cloudsave-smoke --shm-size=1g -p 127.0.0.1:15800:5800 \
+            -e CLOUDSAVE_SMOKE_TEST=1 -e WEB_AUTHENTICATION_USERNAME=ci \
+            -e WEB_AUTHENTICATION_PASSWORD=ephemeral-test-only \
+            -v "$PWD/smoke-data:/config" "$IMAGE"
+          for i in $(seq 1 90); do
+            test -f smoke-data/docker-smoke.json && break
+            sleep 2
+          done
+          cat smoke-data/docker-smoke.json
+          node -e "const r=require('./smoke-data/docker-smoke.json');if(!r.ok||r.uid===0||r.arch!=='x64'||r.secondRun)process.exit(1)"
+          curl -fk https://127.0.0.1:15800/ -o release/web-entry.html
+          docker inspect cloudsave-smoke --format '{{json .State}}' > release/container-state.json
+          docker stop -t 90 cloudsave-smoke
+          node -e "const c=require('./smoke-data/Data/config.json');if(c.windowBehavior.closeToTray!==false)process.exit(1)"
+          cp smoke-data/docker-smoke.json release/first-start.json
+          rm smoke-data/docker-smoke.json
+          docker start cloudsave-smoke
+          for i in $(seq 1 90); do
+            test -f smoke-data/docker-smoke.json && break
+            sleep 2
+          done
+          cat smoke-data/docker-smoke.json
+          node -e "const r=require('./smoke-data/docker-smoke.json');if(!r.ok||!r.secondRun)process.exit(1)"
+          cp smoke-data/docker-smoke.json release/restart-test.json
+          cp smoke-data/docker-smoke.png release/docker-ui.png
+          docker stop -t 90 cloudsave-smoke
+          docker logs cloudsave-smoke > release/container-smoke.log 2>&1
+      - name: Save installable image and source
+        run: |
+          docker save "$IMAGE" | gzip -1 > release/CloudSave-Docker-amd64-20261013.tar.gz
+          cp docker/compose.yaml docker/.env.example docker/README.md release/
+          git archive --format=zip --prefix=cloudsave-assistant/ -o release/CloudSave-Docker-Source-20261013.zip HEAD
+          cd release
+          sha256sum CloudSave-Docker-amd64-20261013.tar.gz CloudSave-Docker-Source-20261013.zip > SHA256SUMS.txt
+          tar czf CloudSave-Docker-Deploy-20261013.tar.gz compose.yaml .env.example README.md
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$RELEASE" --target "$GITHUB_SHA" --latest=false \
+            --title '云存助手 Docker x86-64 · 浏览器访问完整版' --notes-file docker/RELEASE.md
+          gh release upload "$RELEASE" release/CloudSave-Docker-amd64-20261013.tar.gz \
+            release/CloudSave-Docker-Deploy-20261013.tar.gz release/CloudSave-Docker-Source-20261013.zip \
+            release/SHA256SUMS.txt release/docker-ui.png release/first-start.json release/restart-test.json
+      - name: Logs on failure
+        if: failure()
+        run: docker logs cloudsave-smoke || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: docker-validation
+          path: |
+            release/*.json
+            release/*.png
+            release/*.log
+            release/*.html
+          retention-days: 7

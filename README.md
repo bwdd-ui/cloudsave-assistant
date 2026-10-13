@@ -2,7 +2,9 @@
 
 Windows x64 桌面工具，用于浏览影视资源、按条件采集磁力链接、监控网盘分享更新，以及将符合条件的资源保存到指定网盘文件夹。
 
-本仓库对应 2026-10-12 的 Windows 完整版。安装包包含 Electron 运行时，无需额外安装 Node.js。Android 和飞牛 NAS 的历史安装包不包含在此次发布中。
+本仓库包含 Windows 完整版与 Docker x86-64 版。Windows 安装包包含 Electron 运行时，无需额外安装 Node.js；Docker 版可在 NAS 上独立运行，通过浏览器操作。Android 和飞牛 NAS 的历史 FPK 安装包不包含在此次发布中。
+
+Docker 的安装、目录挂载及使用方式见 [Docker 使用说明](docker/README.md)。
 
 ## 功能
 
