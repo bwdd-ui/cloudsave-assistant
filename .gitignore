@@ -12,6 +12,9 @@ data/
 .env.*
 !**/.env.example
 docker-regression.txt
+fnos/cloudsave/app/docker/*.tar.gz
+fnos/dist/
+.DS_Store
 *.pem
 *.key
 privacy-scan.json

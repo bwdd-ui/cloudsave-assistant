@@ -1,0 +1,42 @@
+[
+  {
+    "stepTitle": "修改管理登录",
+    "items": [
+      {
+        "type": "text",
+        "field": "wizard_admin_username",
+        "label": "管理界面用户名",
+        "initValue": "admin",
+        "rules": [
+          {
+            "required": true,
+            "message": "请填写管理用户名"
+          },
+          {
+            "pattern": "^[A-Za-z0-9_-]{3,32}$",
+            "message": "使用3至32位字母、数字、下划线或连字符"
+          }
+        ]
+      },
+      {
+        "type": "password",
+        "field": "wizard_admin_password",
+        "label": "管理界面密码（不是网盘密码）",
+        "rules": [
+          {
+            "required": true,
+            "message": "请设置管理密码"
+          },
+          {
+            "pattern": "^[A-Za-z0-9@!_.+=:-]{12,128}$",
+            "message": "使用12至128位字母、数字或 @ ! _ . + = : -"
+          }
+        ]
+      },
+      {
+        "type": "tips",
+        "helpText": "仅修改浏览器管理界面的登录，不会删除网盘登录状态或监控任务。保存后请在应用中心停止并重新启动本应用。"
+      }
+    ]
+  }
+]

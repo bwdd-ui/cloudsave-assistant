@@ -1,0 +1,42 @@
+[
+  {
+    "stepTitle": "云存助手管理登录",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "安装包内置 Docker 镜像，请先安装并启动飞牛 Docker 应用。安装后访问 https://NAS的IP:18985。配置和历史保留在应用数据目录，Excel 导出到 /output。"
+      },
+      {
+        "type": "text",
+        "field": "wizard_admin_username",
+        "label": "管理界面用户名",
+        "initValue": "admin",
+        "rules": [
+          {
+            "required": true,
+            "message": "请填写管理用户名"
+          },
+          {
+            "pattern": "^[A-Za-z0-9_-]{3,32}$",
+            "message": "使用3至32位字母、数字、下划线或连字符"
+          }
+        ]
+      },
+      {
+        "type": "password",
+        "field": "wizard_admin_password",
+        "label": "管理界面密码（不是网盘密码）",
+        "rules": [
+          {
+            "required": true,
+            "message": "请设置管理密码"
+          },
+          {
+            "pattern": "^[A-Za-z0-9@!_.+=:-]{12,128}$",
+            "message": "使用12至128位字母、数字或 @ ! _ . + = : -"
+          }
+        ]
+      }
+    ]
+  }
+]

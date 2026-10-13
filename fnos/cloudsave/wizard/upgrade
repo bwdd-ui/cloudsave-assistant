@@ -1,0 +1,28 @@
+[
+  {
+    "stepTitle": "保留数据升级",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "升级会保留本地 Data 和原有管理登录配置。如需更改管理密码，可填写下方内容；否则留空。"
+      },
+      {
+        "type": "text",
+        "field": "wizard_admin_username",
+        "label": "新管理用户名（更改密码时使用）",
+        "initValue": "admin"
+      },
+      {
+        "type": "password",
+        "field": "wizard_admin_password",
+        "label": "新管理密码（可留空保留原密码）",
+        "rules": [
+          {
+            "pattern": "^([A-Za-z0-9@!_.+=:-]{12,128})?$",
+            "message": "留空，或使用12至128位字母、数字或 @ ! _ . + = : -"
+          }
+        ]
+      }
+    ]
+  }
+]

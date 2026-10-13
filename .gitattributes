@@ -2,3 +2,7 @@
 Dockerfile text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+fnos/cloudsave/cmd/* text eol=lf
+fnos/cloudsave/manifest text eol=lf
+fnos/cloudsave/config/* text eol=lf
+fnos/cloudsave/wizard/* text eol=lf

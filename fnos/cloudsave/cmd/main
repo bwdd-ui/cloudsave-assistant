@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+case "${1:-}" in
+  start)
+    "$(dirname "$0")/prepare" --check
+    exit 0
+    ;;
+  stop) exit 0 ;;
+  status)
+    state=$(docker inspect --format '{{.State.Running}}' cloudsave-fnos 2>/dev/null || true)
+    [ "$state" = true ] && exit 0
+    exit 3
+    ;;
+  *) exit 1 ;;
+esac

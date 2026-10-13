@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+umask 077
+fail() { printf '%s\n' "$1" >&2; if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then printf '%s\n' "$1" > "$TRIM_TEMP_LOGFILE"; fi; exit 1; }
+: "${TRIM_PKGETC:?}"
+file="$TRIM_PKGETC/web.env"
+username=${wizard_admin_username:-admin}
+password=${wizard_admin_password:-}
+if [ -z "$password" ] && [ -f "$file" ]; then
+  # Parse named fields; never execute an environment file as a shell script.
+  if grep -q '^WEB_AUTHENTICATION_PASSWORD=' "$file"; then exit 0; fi
+  username=$(awk -F "'" '/^CLOUDSAVE_WEB_USER=/{print $2}' "$file")
+  encoded=$(awk -F "'" '/^CLOUDSAVE_WEB_PASSWORD_B64=/{print $2}' "$file")
+  password=$(printf '%s' "$encoded" | base64 -d 2>/dev/null) || fail '旧管理密码无法读取，请在升级向导填写新的管理密码。'
+fi
+case "$username" in ''|*[!A-Za-z0-9_-]*) fail '用户名只能包含字母、数字、下划线或连字符。' ;; esac
+[ "${#username}" -ge 3 ] && [ "${#username}" -le 32 ] || fail '用户名长度必须为3至32位。'
+case "$password" in ''|*[!A-Za-z0-9@!_.+=:-]*) fail '密码请使用字母、数字或 @ ! _ . + = : -。' ;; esac
+[ "${#password}" -ge 12 ] && [ "${#password}" -le 128 ] || fail '管理密码长度必须为12至128位。'
+uid=$(id -u "${TRIM_USERNAME:-docker-cloudsave}") || fail '找不到飞牛应用运行用户。'
+gid=$(id -g "${TRIM_USERNAME:-docker-cloudsave}") || fail '找不到飞牛应用运行用户组。'
+[ "$uid" -gt 0 ] || fail '容器应用必须使用非 root 用户。'
+mkdir -p "$TRIM_PKGETC"
+temp=$(mktemp "$TRIM_PKGETC/web.env.XXXXXX")
+trap 'rm -f "$temp"' EXIT HUP INT TERM
+printf "WEB_AUTHENTICATION_USERNAME='%s'\nWEB_AUTHENTICATION_PASSWORD='%s'\nUSER_ID='%s'\nGROUP_ID='%s'\n" "$username" "$password" "$uid" "$gid" > "$temp"
+chmod 600 "$temp"
+mv -f "$temp" "$file"

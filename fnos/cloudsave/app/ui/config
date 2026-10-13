@@ -1,0 +1,13 @@
+{
+  ".url": {
+    "cloudsave.Application": {
+      "title": "云存助手 NAS",
+      "icon": "images/icon_{0}.png",
+      "type": "url",
+      "protocol": "https",
+      "port": "18985",
+      "url": "/",
+      "allUsers": false
+    }
+  }
+}

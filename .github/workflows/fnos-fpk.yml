@@ -1,0 +1,47 @@
+name: fnOS FPK x86-64 build and release
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fpk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch verified official tool and embedded image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/fnpack
+          curl -fL https://static2.fnnas.com/fnpack/fnpack-1.2.3-linux-amd64 -o /tmp/fnpack/fnpack
+          echo '54b97fa7b70968c4d05c79840f5daeff508957d0bb2062fdb0376d00d9615c93  /tmp/fnpack/fnpack' | sha256sum -c -
+          chmod +x /tmp/fnpack/fnpack
+          /tmp/fnpack/fnpack --help
+          gh release download v2026.10.13-docker --pattern CloudSave-Docker-amd64-20261013.tar.gz --dir fnos/cloudsave/app/docker
+          echo 'fef85d4cd4823f13bb03d480d8154034a2574a0a58d22ad4a54f1bf2ffd46800  fnos/cloudsave/app/docker/CloudSave-Docker-amd64-20261013.tar.gz' | sha256sum -c -
+      - name: Lifecycle and actual Docker runtime
+        run: bash fnos/test-lifecycle.sh
+      - name: Official FPK build and archive validation
+        env:
+          FNPACK_BIN: /tmp/fnpack/fnpack
+        run: python3 fnos/build.py
+      - name: Publish FPK release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git archive --format=zip --prefix=cloudsave-assistant/ -o fnos/dist/CloudSave-fnOS-Source-1.1.0.zip HEAD
+          gh release create v2026.10.13-fnos --target "$GITHUB_SHA" --latest=false --title '云存助手飞牛 NAS FPK · x86-64 · 1.1.0' --notes-file fnos/RELEASE.md
+          gh release upload v2026.10.13-fnos fnos/dist/CloudSave-fnOS-x86-1.1.0.fpk fnos/dist/CloudSave-fnOS-Source-1.1.0.zip fnos/dist/SHA256SUMS.txt fnos/dist/fpk-validation.json fnos/dist/fnos-lifecycle.json fnos/dist/fnos-container.json fnos/dist/fnos-ui.png
+      - name: Diagnostic log
+        if: failure()
+        run: docker logs cloudsave-fnos || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fnos-validation
+          path: |
+            fnos/dist/*.json
+            fnos/dist/*.png
+            fnos/dist/*.log
+          retention-days: 7

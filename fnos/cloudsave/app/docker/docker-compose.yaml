@@ -1,0 +1,25 @@
+services:
+  cloudsave:
+    image: cloudsave-assistant:docker-20261013
+    pull_policy: never
+    platform: linux/amd64
+    container_name: cloudsave-fnos
+    restart: unless-stopped
+    ports:
+      - "${TRIM_SERVICE_PORT:-18985}:5800"
+    env_file:
+      - ${TRIM_PKGETC}/web.env
+    environment:
+      CLOUDSAVE_SMOKE_TEST: ${CLOUDSAVE_SMOKE_TEST:-0}
+      TZ: Asia/Shanghai
+      SECURE_CONNECTION: "1"
+      WEB_AUTHENTICATION: "1"
+      VNC_LISTENING_PORT: "-1"
+      WEB_TERMINAL: "0"
+      WEB_FILE_MANAGER: "1"
+      WEB_FILE_MANAGER_ALLOWED_PATHS: /output
+    volumes:
+      - "${TRIM_PKGVAR}:/config"
+      - "${TRIM_DATA_SHARE_PATHS}:/output"
+    shm_size: 1gb
+    stop_grace_period: 90s
