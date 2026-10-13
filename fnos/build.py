@@ -9,8 +9,8 @@ import tarfile
 
 ROOT = pathlib.Path(__file__).resolve().parent
 APP = ROOT / 'cloudsave'
-IMAGE_NAME = 'CloudSave-Docker-amd64-20261013.tar.gz'
-IMAGE_SHA = 'fef85d4cd4823f13bb03d480d8154034a2574a0a58d22ad4a54f1bf2ffd46800'
+IMAGE_NAME = 'CloudSave-Docker-amd64-1.2.0.tar.gz'
+IMAGE_SHA = '6500f22cd28af0fbdd68da11d0dc54d42df7c8390ebee80b797fee6aaddfb7ae'
 
 def sha(path):
     with path.open('rb') as f:
@@ -51,7 +51,7 @@ def main():
                 assert member.mode & 0o111, f'Non-executable lifecycle script: {member.name}'
     out = ROOT / 'dist'
     out.mkdir(exist_ok=True)
-    target = out / 'CloudSave-fnOS-x86-1.1.0.fpk'
+    target = out / 'CloudSave-fnOS-x86-1.2.0.fpk'
     shutil.copyfile(package, target)
     report = {'package': target.name, 'bytes': target.stat().st_size, 'sha256': sha(target),
               'embeddedImageSha256': IMAGE_SHA, 'officialFnpack': '1.2.3',

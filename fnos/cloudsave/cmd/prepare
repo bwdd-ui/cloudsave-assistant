@@ -6,14 +6,14 @@ fail() { printf '%s\n' "$1" >&2; if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then printf
 command -v docker >/dev/null 2>&1 || fail '请先安装并启动飞牛 Docker 应用。'
 docker info >/dev/null 2>&1 || fail 'Docker 服务未启动，请先在飞牛应用中心启动 Docker。'
 case "$(uname -m)" in x86_64|amd64) ;; *) fail '本安装包仅支持 x86-64 设备。' ;; esac
-tag=cloudsave-assistant:docker-20261013
-expected=sha256:d675a7ee70bab4d2e6f29b47c7d98739addf1f3d9b77903885fc3f14f22b6977
+tag=cloudsave-assistant:1.2.0
+expected=sha256:b8e4481e6e55c93e576912b6348711851f16278b36b942c48f3fa83ee084686c
 actual=$(docker image inspect --format '{{.Id}}' "$tag" 2>/dev/null || true)
 if [ "$actual" != "$expected" ]; then
-  image="$TRIM_APPDEST/docker/CloudSave-Docker-amd64-20261013.tar.gz"
+  image="$TRIM_APPDEST/docker/CloudSave-Docker-amd64-1.2.0.tar.gz"
   [ -f "$image" ] || fail '安装包的内置镜像缺失，请重新下载完整 FPK。'
   actual_hash=$(sha256sum "$image" | cut -d ' ' -f 1)
-  [ "$actual_hash" = fef85d4cd4823f13bb03d480d8154034a2574a0a58d22ad4a54f1bf2ffd46800 ] || fail '内置镜像校验失败，请重新下载 FPK。'
+  [ "$actual_hash" = 6500f22cd28af0fbdd68da11d0dc54d42df7c8390ebee80b797fee6aaddfb7ae ] || fail '内置镜像校验失败，请重新下载 FPK。'
   docker load -i "$image" >/dev/null || fail '镜像导入失败，请检查 Docker 服务和存储空间。'
   actual=$(docker image inspect --format '{{.Id}}' "$tag" 2>/dev/null || true)
   [ "$actual" = "$expected" ] || fail '导入后的镜像身份不符合预期。'

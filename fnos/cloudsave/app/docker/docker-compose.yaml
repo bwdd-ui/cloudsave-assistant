@@ -1,6 +1,6 @@
 services:
   cloudsave:
-    image: cloudsave-assistant:docker-20261013
+    image: cloudsave-assistant:1.2.0
     pull_policy: never
     platform: linux/amd64
     container_name: cloudsave-fnos
