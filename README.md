@@ -59,7 +59,7 @@ node tests/run-tests.cjs
 ## 开发资料
 
 - [架构与移交说明](docs/ARCHITECTURE.md)
-- [1.2.0 优化版发布说明](docs/RELEASE-1.2.0.md)
+- [1.2.1 页面布局发布说明](docs/RELEASE-1.2.1.md)
 - `cloudsave-windows` 中包含完整运行源码、锁定依赖清单、测试和各功能开发说明。
 - Excel 列顺序：名称、资源大小、上映时间、磁力链接、磁力名称、时长、分辨率、帧率、视频、音频、类型、制片国家/地区。
 

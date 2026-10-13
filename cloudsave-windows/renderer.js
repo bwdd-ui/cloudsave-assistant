@@ -22,7 +22,7 @@ function setSidebarCollapsed(collapsed) {
   button.setAttribute('aria-expanded', String(!collapsed));
   button.setAttribute('aria-label', collapsed ? '展开侧栏' : '收起侧栏');
   button.title = collapsed ? '展开侧栏' : '收起侧栏';
-  document.querySelectorAll('.side-nav .nav-btn').forEach(item => { item.title = item.querySelector('.nav-label')?.textContent || ''; });
+  document.querySelectorAll('.side-nav .nav-btn').forEach(item => { item.title = item.dataset.fullLabel || item.querySelector('.nav-label')?.textContent || ''; });
   try { localStorage.setItem('sidebarCollapsed', String(collapsed)); } catch (_) {}
 }
 $('toggleSidebar').onclick = () => setSidebarCollapsed(!document.body.classList.contains('sidebar-collapsed'));

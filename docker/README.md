@@ -4,12 +4,12 @@
 
 ## 安装
 
-在 [Docker 发布页](https://github.com/bwdd-ui/cloudsave-assistant/releases/tag/v1.2.0-docker) 下载镜像 `CloudSave-Docker-amd64-1.2.0.tar.gz` 和部署资料 `CloudSave-Docker-Deploy-1.2.0.tar.gz`。通过 NAS 的 Docker 镜像导入界面导入镜像，或在服务器终端执行：
+在 [Docker 发布页](https://github.com/bwdd-ui/cloudsave-assistant/releases/tag/v1.2.1-docker) 下载镜像 `CloudSave-Docker-amd64-1.2.1.tar.gz` 和部署资料 `CloudSave-Docker-Deploy-1.2.1.tar.gz`。通过 NAS 的 Docker 镜像导入界面导入镜像，或在服务器终端执行：
 
 ```sh
 mkdir -p cloudsave && cd cloudsave
-docker load -i /下载路径/CloudSave-Docker-amd64-1.2.0.tar.gz
-tar xzf /下载路径/CloudSave-Docker-Deploy-1.2.0.tar.gz
+docker load -i /下载路径/CloudSave-Docker-amd64-1.2.1.tar.gz
+tar xzf /下载路径/CloudSave-Docker-Deploy-1.2.1.tar.gz
 cp .env.example .env
 ```
 
@@ -53,7 +53,7 @@ docker compose stop
 在仓库根目录执行：
 
 ```sh
-docker build --platform linux/amd64 -f docker/Dockerfile -t cloudsave-assistant:1.2.0 .
+docker build --platform linux/amd64 -f docker/Dockerfile -t cloudsave-assistant:1.2.1 .
 cd docker
 cp .env.example .env
 # 设置密码后执行

@@ -33,7 +33,19 @@ app.whenReady().then(async () => {
   await fixture.webContents.executeJavaScript('window.scrollTo(0,4000)'); await new Promise(resolve => setTimeout(resolve, 500));
   assert(await fixture.webContents.executeJavaScript('calls') > lazy.calls, 'Scrolling starts new covers'); fixture.destroy();
   fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'desktop-ui.png'), (await win.webContents.capturePage()).toPNG());
-  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true }));
+  // Verify the reorganized navigation using the actual existing handlers.
+  const hasLayout = await win.webContents.executeJavaScript("Boolean(document.querySelector('.workspace-bar'))");
+  if (hasLayout) {
+    await win.webContents.executeJavaScript("document.getElementById('showMonitorFilter').click();void 0;");
+    await new Promise(resolve => setTimeout(resolve, 250));
+    const monitor = await win.webContents.executeJavaScript("({title:document.querySelector('.workspace-title').textContent,jumps:!document.querySelector('.workspace-monitor-jumps').hidden,inline:document.getElementById('filterPage').contains(document.getElementById('share115Page')),groups:[...document.querySelectorAll('.nav-group-body')].filter(x=>!x.hidden).length,disclosure:!!document.querySelector('#filterPage .monitor-native-disclosure')})");
+    assert(monitor.title.includes('不太灵')); assert(monitor.jumps && monitor.inline && monitor.disclosure); assert.equal(monitor.groups, 1);
+    fs.writeFileSync(path.join(output, 'monitor-layout.png'), (await win.webContents.capturePage()).toPNG());
+    await win.webContents.executeJavaScript("document.getElementById('showSettings').click();void 0;"); await new Promise(resolve => setTimeout(resolve, 80));
+    await win.webContents.executeJavaScript("document.getElementById('closeSettings').click();void 0;"); await new Promise(resolve => setTimeout(resolve, 80));
+    assert.equal(await win.webContents.executeJavaScript("document.querySelector('.side-nav .nav-btn.active').id"), 'showMonitorFilter', 'Settings returns to the previous workspace');
+  }
+  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout }));
   await win.webContents.executeJavaScript('window.cloudsave.backgroundSettings({closeToTray:false})');
   app.quit();
 }).catch(error => { console.error(error); fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: false, error: error.stack })); app.exit(1); });

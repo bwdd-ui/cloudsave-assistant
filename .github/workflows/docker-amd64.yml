@@ -8,8 +8,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
-      IMAGE: cloudsave-assistant:1.2.0
-      RELEASE: v1.2.0-docker
+      IMAGE: cloudsave-assistant:1.2.1
+      RELEASE: v1.2.1-docker
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -53,21 +53,21 @@ jobs:
           docker logs cloudsave-smoke > release/container-smoke.log 2>&1
       - name: Save installable image and source
         run: |
-          docker save "$IMAGE" | gzip -1 > release/CloudSave-Docker-amd64-1.2.0.tar.gz
+          docker save "$IMAGE" | gzip -1 > release/CloudSave-Docker-amd64-1.2.1.tar.gz
           docker image inspect "$IMAGE" --format '{{json .}}' > release/image-metadata.json
           cp docker/compose.yaml docker/.env.example docker/README.md release/
-          git archive --format=zip --prefix=cloudsave-assistant/ -o release/CloudSave-Docker-Source-1.2.0.zip HEAD
+          git archive --format=zip --prefix=cloudsave-assistant/ -o release/CloudSave-Docker-Source-1.2.1.zip HEAD
           cd release
-          sha256sum CloudSave-Docker-amd64-1.2.0.tar.gz CloudSave-Docker-Source-1.2.0.zip > SHA256SUMS.txt
-          tar czf CloudSave-Docker-Deploy-1.2.0.tar.gz compose.yaml .env.example README.md
+          sha256sum CloudSave-Docker-amd64-1.2.1.tar.gz CloudSave-Docker-Source-1.2.1.zip > SHA256SUMS.txt
+          tar czf CloudSave-Docker-Deploy-1.2.1.tar.gz compose.yaml .env.example README.md
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$RELEASE" --target "$GITHUB_SHA" --latest=false \
-            --title '云存助手 1.2.0 Docker x86-64 · 优化版' --notes-file docker/RELEASE.md
-          gh release upload "$RELEASE" release/CloudSave-Docker-amd64-1.2.0.tar.gz \
-            release/CloudSave-Docker-Deploy-1.2.0.tar.gz release/CloudSave-Docker-Source-1.2.0.zip \
+            --title '云存助手 1.2.1 Docker x86-64 · 优化版' --notes-file docker/RELEASE.md
+          gh release upload "$RELEASE" release/CloudSave-Docker-amd64-1.2.1.tar.gz \
+            release/CloudSave-Docker-Deploy-1.2.1.tar.gz release/CloudSave-Docker-Source-1.2.1.zip \
             release/SHA256SUMS.txt release/docker-ui.png release/first-start.json release/restart-test.json release/image-metadata.json
       - name: Logs on failure
         if: failure()
