@@ -11,7 +11,7 @@ RUN node -e "const fs=require('fs');fs.mkdirSync('/out');for(const f of require(
 FROM jlesage/baseimage-gui:debian-12-v4.14.0
 RUN add-pkg libnss3 libatk1.0-0 libatk-bridge2.0-0 libdrm2 libxkbcommon0 \
     libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2 libgtk-3-0 \
-    libxshmfence1 libxss1 libsecret-1-0 fonts-noto-cjk ca-certificates curl \
+    libxshmfence1 libxss1 libsecret-1-0 fonts-noto-cjk ca-certificates curl gdb \
     && mkdir -p /opt/cloudsave /output
 COPY --from=application /out/ /opt/cloudsave/
 COPY docker/startapp.sh /startapp.sh

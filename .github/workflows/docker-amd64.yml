@@ -23,7 +23,8 @@ jobs:
       - name: Real container startup and persistence test
         run: |
           mkdir -p smoke-data release
-          docker run -d --name cloudsave-smoke --shm-size=1g -p 127.0.0.1:15800:5800 \
+          docker run -d --name cloudsave-smoke --shm-size=1g --cap-add=SYS_PTRACE -p 127.0.0.1:15800:5800 \
+            -e CLOUDSAVE_DEBUG=1 \
             -e CLOUDSAVE_SMOKE_TEST=1 -e WEB_AUTHENTICATION_USERNAME=ci \
             -e WEB_AUTHENTICATION_PASSWORD=ephemeral-test-only \
             -v "$PWD/smoke-data:/config" "$IMAGE"
