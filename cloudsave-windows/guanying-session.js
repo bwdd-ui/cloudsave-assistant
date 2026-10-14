@@ -18,7 +18,11 @@ class GuanyingSession{
  async performCapture(win){if(this.closed)return;const old=this.read()||{},cookies=(await this.partition.cookies.get({url:this.origin})).filter(c=>this.allowed(c));let storage=old.storage||'';
   if(win&&!win.isDestroyed()){try{if(new URL(win.webContents.getURL()).origin===this.origin){const value=await bounded(()=>win.webContents.executeJavaScript(`JSON.stringify(Object.fromEntries(Object.keys(localStorage).map(k=>[k,localStorage.getItem(k)])))`),8000,'保存观影网站状态');if(value.length<1024*1024)storage=this.encrypt(value);}}catch{}}
   const changed=this.decrypt(old.cookies||'')!==JSON.stringify(cookies)||(storage&&this.decrypt(storage)!==this.decrypt(old.storage||''));
-  const userAgent=win?.webContents.getUserAgent?.()||this.partition.getUserAgent?.()||old.userAgent;
+  // The login window may close while cookies/storage are being read. Its
+  // destruction must not discard the live cookie jar or fail exit-time saving.
+  let windowAgent;
+  try{if(win&&!win.isDestroyed())windowAgent=win.webContents.getUserAgent?.();}catch{}
+  const userAgent=windowAgent||this.partition.getUserAgent?.()||old.userAgent;
   if(changed||old.userAgent!==userAgent)this.save({...old,cookies:this.encrypt(JSON.stringify(cookies)),storage,userAgent,savedAt:changed?new Date().toISOString():old.savedAt||new Date().toISOString()});
   await this.partition.cookies.flushStore?.();await this.partition.flushStorageData?.();
  }
