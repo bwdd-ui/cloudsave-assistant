@@ -89,3 +89,25 @@ body.sidebar-collapsed .nav-group-toggle span{display:none}body.sidebar-collapse
 .main>section{min-height:0}.offline-history-toolbar{gap:12px!important;align-items:flex-end}.offline-history-toolbar label{flex:0 1 160px}.offline-history-toolbar .btn{min-height:40px}.settings-account-tiles{grid-template-columns:repeat(auto-fill,minmax(145px,180px));justify-content:start}
 @media(max-width:1200px){.workspace-bar{padding:10px 18px}.workspace-context{gap:8px}.workspace-title{font-size:15px}.workspace-actions{gap:5px}}
 @media(prefers-reduced-motion:reduce){.nav-group-toggle b{transition:none}}
+
+/* Task overview distinguishes accepted submissions from real cloud progress. */
+.offline-overview{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start;margin-bottom:16px}
+.offline-overview>.card{min-width:0;margin-bottom:0;padding:20px}
+.offline-overview h2{font-size:15px;font-weight:650;line-height:1.6;color:#294656;margin:0 0 16px}
+.offline-overview .submission-counts{gap:12px 18px;min-height:45px}
+.offline-overview .submission-counts b{font-size:24px;font-variant-numeric:tabular-nums}
+.offline-sync-controls{display:flex;flex-wrap:wrap;gap:12px!important;align-items:center}
+.offline-sync-controls>label{display:flex;align-items:center;flex-wrap:wrap;gap:7px;font-size:12px;line-height:1.7;color:#496573;min-width:0}
+.offline-sync-controls>.sub{flex-basis:100%;font-size:11px}
+.offline-sync-controls .input{min-width:0;max-width:100%;font-size:12px}
+.offline-overview .offline-history-toolbar label{flex:1 1 145px;min-width:0}
+.offline-overview .offline-history-toolbar .input{width:100%;min-width:0}
+.offline-overview .btn{font-size:12px;padding:9px 12px}
+.offline-sync-card .offline-task-note{border-top:1px solid #e3ecef;padding-top:12px;margin-top:12px}
+.offline-episode-disclosure{border:1px solid #dde7ec;border-radius:12px;background:#fff;margin:12px 0 16px;padding:12px 16px}
+.offline-episode-disclosure summary{cursor:pointer;font-size:13px;font-weight:600;color:#496573;line-height:1.8}
+.offline-episode-disclosure>.card{box-shadow:none;border:0;padding:12px 0 0;margin:0!important}
+.offline-episode-disclosure>.card>b{display:none}
+.workspace-bar .workspace-context{min-width:0}.workspace-title{overflow-wrap:anywhere}
+@media(max-width:1250px){.offline-overview{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:800px){.workspace-bar{padding:10px 14px;gap:9px}.workspace-context{flex-basis:100%}.workspace-actions{width:100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}.workspace-actions .btn{min-width:0;padding:8px 4px}.workspace-actions .workspace-related[hidden]+button{grid-column:span 2}.offline-overview>.card{padding:16px}.workspace-monitor-jumps span{flex-basis:100%;margin-left:0}}

@@ -33,6 +33,21 @@ app.whenReady().then(async () => {
   await fixture.webContents.executeJavaScript('window.scrollTo(0,4000)'); await new Promise(resolve => setTimeout(resolve, 500));
   assert(await fixture.webContents.executeJavaScript('calls') > lazy.calls, 'Scrolling starts new covers'); fixture.destroy();
   fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'desktop-ui.png'), (await win.webContents.capturePage()).toPNG());
+  // Exercise the task overview at different desktop window widths.
+  await win.webContents.executeJavaScript("document.getElementById('showOfflineTasks').click();void 0;");
+  assert(await win.webContents.executeJavaScript("!document.querySelector('.offline-episode-disclosure').open && document.querySelector('.offline-episode-disclosure').contains(document.getElementById('offlineEpisodeSave'))"));
+  for (const width of [1500, 1040, 800]) {
+    win.setSize(width, 900); await new Promise(resolve => setTimeout(resolve, 120));
+    const overview = await win.webContents.executeJavaScript(`(() => {
+      const page=document.getElementById('offlineTasksPage'),card=document.querySelector('.offline-sync-card');
+      return {cloud:card.contains(document.getElementById('cloudDownloadCounts')),controls:card.contains(document.getElementById('cloudSyncSave')),history:document.querySelector('.offline-history-tools').contains(document.getElementById('submitHistorySource')),unique:document.querySelectorAll('#cloudSyncSave').length===1,overflow:page.scrollWidth-page.clientWidth,columns:getComputedStyle(document.querySelector('.offline-overview')).gridTemplateColumns.split(' ').length};
+    })()`);
+    assert(overview.cloud && overview.controls && overview.history && overview.unique);
+    assert(overview.overflow <= 1, 'Offline task page must not overflow at '+width+'px');
+    assert.equal(overview.columns, width > 1250 ? 2 : 1);
+  }
+  fs.writeFileSync(path.join(output,'offline-layout.png'),(await win.webContents.capturePage()).toPNG());
+  win.setSize(1440,900);
   // Verify the reorganized navigation using the actual existing handlers.
   const hasLayout = await win.webContents.executeJavaScript("Boolean(document.querySelector('.workspace-bar'))");
   if (hasLayout) {
@@ -45,7 +60,7 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript("document.getElementById('closeSettings').click();void 0;"); await new Promise(resolve => setTimeout(resolve, 80));
     assert.equal(await win.webContents.executeJavaScript("document.querySelector('.side-nav .nav-btn.active').id"), 'showMonitorFilter', 'Settings returns to the previous workspace');
   }
-  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout }));
+  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800] }));
   await win.webContents.executeJavaScript('window.cloudsave.backgroundSettings({closeToTray:false})');
   app.quit();
 }).catch(error => { console.error(error); fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: false, error: error.stack })); app.exit(1); });
