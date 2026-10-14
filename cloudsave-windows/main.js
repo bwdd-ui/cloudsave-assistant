@@ -2079,11 +2079,16 @@ ipcMain.handle('set-library-preferences', (_event, preferences = {}) => {
   writeConfig(config); return config.libraryPreferences;
 });
 ipcMain.handle('get-state', () => ({ cookie: Boolean(loadCookie()), folder: readConfig().folder || { cid: '0', name: '根目录' } }));
+const nativeLibraryPages=new (require('./filtered-library-pages').FilteredLibraryPages)();
 async function fetchNativeLibraryPage(mode,requestedPage,filters={}){
  const page=Math.max(1,Math.floor(Number(requestedPage)||1)),options={...filters,strictCatalog:true,withinDays:0,withinMinutes:0,dateMode:'recent',startDate:'',endDate:''};
- const batch=await fetchCloudCatalog(mode,page,options),year=/^\d{4}$/.test(String(filters.years||''))?String(filters.years):'',localStatus=mode==='tv'&&['更新中','已完结'].includes(filters.status);
- const items=batch.items.filter(item=>(!year||item.year===year)&&(!localStatus||Boolean(item.updateText)&&(filters.status==='更新中'?item.updateText.includes('更新至')&&!item.updateText.includes('全'):item.updateText.includes('全'))));
- return {...batch,page,items,nativePagination:true,nativeItemCount:batch.items.length,nativeFiltered:items.length!==batch.items.length,hasNext:page*batch.limit<batch.total};
+ const year=/^\d{4}$/.test(String(filters.years||filters.yearsCustom||''))?String(filters.years||filters.yearsCustom):'',localStatus=mode==='tv'&&['更新中','已完结'].includes(filters.status);
+ if(year||localStatus){
+  const key=crypto.createHash('sha256').update(JSON.stringify([mirrorConfig().current,readConfig().siteSession||{},mode,options])).digest('hex');
+  return nativeLibraryPages.get(key,page,index=>fetchCloudCatalog(mode,index,options),item=>(!year||item.year===year)&&(!localStatus||Boolean(item.updateText)&&(filters.status==='更新中'?item.updateText.includes('更新至')&&!item.updateText.includes('全'):item.updateText.includes('全'))),()=>shuttingDown);
+ }
+ const batch=await fetchCloudCatalog(mode,page,options);
+ return {...batch,page,nativePagination:true,nativeItemCount:batch.items.length,hasNext:page*batch.limit<batch.total};
 }
 ipcMain.handle('cloud-catalog',(_event,mode,page,filters)=>fetchNativeLibraryPage(mode || 'movie',page,filters || {}));
 ipcMain.handle('cloud-search',async(_event,query,requestedPage)=>{const page=Math.max(1,Math.floor(Number(requestedPage)||1));return {...await fetchCloudSearch(String(query || ''),page),page,nativePagination:true};});

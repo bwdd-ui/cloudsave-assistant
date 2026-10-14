@@ -48,6 +48,18 @@ app.whenReady().then(async () => {
   }
   fs.writeFileSync(path.join(output,'offline-layout.png'),(await win.webContents.capturePage()).toPNG());
   win.setSize(1440,900);
+  // Validate actual rendering/paging with an isolated, mixed-year catalogue.
+  const {ipcMain}=require('electron'),{FilteredLibraryPages}=require('../filtered-library-pages'),filtered=new FilteredLibraryPages();
+  const films=Array.from({length:75},(_,i)=>({id:String(i),title:'筛选测试'+i,year:i<25?(i<11?'2026':'2025'):i<50?'2026':'2025'}));
+  ipcMain.removeHandler('cloud-catalog');ipcMain.handle('cloud-catalog',(_e,mode,page)=>filtered.get('fixture',page,async n=>({items:films.slice((n-1)*25,n*25),limit:25,total:75}),x=>x.year==='2026'));
+  await win.webContents.executeJavaScript("document.getElementById('showCloudHome').click();cloudFilterState={years:'2026'};cloudPage=1;loadCloudLibrary();void 0;");
+  await new Promise(resolve=>setTimeout(resolve,300));
+  assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#cloudLibraryGrid .cloud-poster-card').length"),25);
+  assert((await win.webContents.executeJavaScript("document.getElementById('cloudLibraryStatus').textContent")).includes('跨页补齐'));
+  await win.webContents.executeJavaScript("cloudPage=2;loadCloudLibrary();void 0;");await new Promise(resolve=>setTimeout(resolve,300));
+  assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#cloudLibraryGrid .cloud-poster-card').length"),11);
+  assert.equal(await win.webContents.executeJavaScript("document.getElementById('cloudNext').disabled"),true);
+  fs.writeFileSync(path.join(output,'filtered-library.png'),(await win.webContents.capturePage()).toPNG());
   // Verify the reorganized navigation using the actual existing handlers.
   const hasLayout = await win.webContents.executeJavaScript("Boolean(document.querySelector('.workspace-bar'))");
   if (hasLayout) {
@@ -60,7 +72,7 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript("document.getElementById('closeSettings').click();void 0;"); await new Promise(resolve => setTimeout(resolve, 80));
     assert.equal(await win.webContents.executeJavaScript("document.querySelector('.side-nav .nav-btn.active').id"), 'showMonitorFilter', 'Settings returns to the previous workspace');
   }
-  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800] }));
+  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800], filteredLibraryPages: true }));
   await win.webContents.executeJavaScript('window.cloudsave.backgroundSettings({closeToTray:false})');
   app.quit();
 }).catch(error => { console.error(error); fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: false, error: error.stack })); app.exit(1); });

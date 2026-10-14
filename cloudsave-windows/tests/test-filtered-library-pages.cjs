@@ -1,0 +1,24 @@
+const assert=require('node:assert/strict'),{FilteredLibraryPages}=require('../filtered-library-pages'),{BtbtlaProvider,catalogPath}=require('../btbtla-provider');
+(async()=>{
+ const pager=new FilteredLibraryPages(),reads=[];
+ const source=Array.from({length:75},(_,i)=>({id:String(i),year:i<25?(i<11?'2026':'2025'):i<50?'2026':'2025',score:100-i}));
+ const read=async page=>{reads.push(page);return {items:source.slice((page-1)*25,page*25),limit:25,total:75};};
+ const match=item=>item.year==='2026';
+ const a=await pager.get('year-score',1,read,match);assert.equal(a.items.length,25);assert(a.items.every(match));assert(a.hasNext);
+ assert.deepEqual(a.items.map(x=>x.id),source.filter(match).slice(0,25).map(x=>x.id),'Native global sort preserved before pagination');
+ const b=await pager.get('year-score',2,read,match);assert.equal(b.items.length,11);assert.equal(b.total,36);assert(b.totalKnown);assert(!b.hasNext);assert(!a.items.some(x=>b.items.some(y=>x.id===y.id)));
+ const before=reads.length;await pager.get('year-score',1,read,match);assert.equal(reads.length,before,'Back navigation reuses assembled page');
+ const beyond=await pager.get('year-score',9,read,match);assert.equal(beyond.page,2);assert.equal(beyond.items.length,11);
+ const concurrent=new FilteredLibraryPages();let calls=0;
+ const r=async page=>{calls++;await new Promise(resolve=>setImmediate(resolve));return {items:Array.from({length:25},(_,i)=>({id:page+'-'+i,year:'2026'})),limit:25,total:75};};
+ const results=await Promise.all([concurrent.get('same',1,r,match),concurrent.get('same',2,r,match)]);assert.equal(calls,3);assert.equal(results[1].items.length,25);
+ await assert.rejects(new FilteredLibraryPages().get('repeat',1,async()=>({items:[{id:'x',year:'2025'}],limit:25,total:100}),match),/重复/);
+ const retry=new FilteredLibraryPages();let fail=true;
+ const flaky=async page=>{if(page===2&&fail){fail=false;throw Error('temporary');}return read(page);};
+ await assert.rejects(retry.get('retry',1,flaky,match),/temporary/);assert.equal((await retry.get('retry',1,flaky,match)).items.length,25);
+ const bt=new BtbtlaProvider({stopped:()=>false});bt.read=async()=>({choices:{year:[{value:'0',label:'全部年份'},{value:'1',label:'2025'}]},items:[]});
+ const year=String(new Date().getFullYear()),option=(await bt.filters()).year.find(x=>x.label===year);assert(option);assert.equal(new URL(catalogPath('mv',1,{year:option.value}), 'https://www.btbtla.com').searchParams.get('y'),'0');
+ bt.nativeCatalog=async(category,page)=>({...await read(page),items:(await read(page)).items});
+ const btPage=await bt.catalog('mv',1,{year:'year:2026',sort:'score'});assert.equal(btPage.items.length,25);assert(btPage.items.every(match));bt.close();
+ console.log('PASS 25-item global filtered pages, 11-item last page, native sort, cache, concurrent navigation, repeated-page guard, retry and missing BT year');
+})().catch(error=>{console.error(error);process.exitCode=1;});
