@@ -12,7 +12,8 @@ class BufferedJson {
       if (this.worker !== worker) return;
       if (!this.busy || result.id !== this.busy.id) return;
       if (result.error) {
-        for (const [target, value] of this.busy.records) if (!this.pending.has(target)) this.pending.set(target, value);
+        const failed = Array.isArray(result.failedTargets) ? new Set(result.failedTargets) : null;
+        for (const [target, value] of this.busy.records) if ((!failed || failed.has(target)) && !this.pending.has(target)) this.pending.set(target, value);
         this.busy = null; this.lastError = new Error(result.error);
         for (const waiter of this.waiters.splice(0)) waiter.reject(this.lastError);
         this.worker.unref(); this.arm(); return;
@@ -36,8 +37,18 @@ class BufferedJson {
     this.arm();
   }
   set(target, value) { if (this.closed) throw new Error('数据写入已关闭'); this.pending.set(target, value); this.arm(); }
-  async xlsx(target, rows, table = null) { this.set(target, { __xlsxExport: true, rows, table }); await this.flush(); }
-  peek(target) { return this.pending.get(target) ?? this.busy?.records.find(row => row[0] === target)?.[1]; }
+  async xlsx(target, rows, table = null) {
+    const exportValue = { __xlsxExport: true, rows, table }; this.set(target, exportValue);
+    try { await this.flush(); }
+    catch (error) {
+      // An export reports failure to its caller. Do not keep retrying that
+      // disposable workbook and block exit or a later export to another path.
+      if (this.pending.get(target) === exportValue) this.pending.delete(target);
+      if (!this.pending.size && !this.busy && this.timer) { clearTimeout(this.timer); this.timer = null; }
+      throw error;
+    }
+  }
+  peek(target) { return this.pending.has(target) ? this.pending.get(target) : this.busy?.records.find(row => row[0] === target)?.[1]; }
   dirty(target) { return this.pending.has(target) || Boolean(this.busy?.records.some(row => row[0] === target)); }
   arm() { if (!this.closed && !this.timer && !this.busy && this.pending.size) this.timer = setTimeout(() => { this.timer = null; this.send(); }, this.lastError ? Math.max(1000, this.delay) : this.delay); }
   send() {
