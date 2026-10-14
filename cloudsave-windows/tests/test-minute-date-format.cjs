@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict');
+const {minuteMatch,scanLowerBound,updateValue}=require('../monitor-time');
+const now=Date.parse('2026-10-14T12:00:00+08:00'),filters={dateMode:'minutes',withinMinutes:10080};
+for(const text of ['2026/10/9','2026/10/09','2026-10-9','2026-10-09'])assert(minuteMatch(text,filters,now),text);
+for(const text of ['2026/9/30','2026-10-15','2026-02-30','2025-02-29','2026/13/1','2026/10/0'])assert(!minuteMatch(text,filters,now),text);
+assert(minuteMatch('2024/2/29',{dateMode:'minutes',withinMinutes:60},Date.parse('2024-02-29T00:30:00+08:00')));
+const midnight=Date.parse('2026-10-14T00:05:00+08:00');
+assert(minuteMatch('2026/10/13',{dateMode:'minutes',withinMinutes:10},midnight),'Date-only yesterday overlaps a short window across midnight');
+assert(!minuteMatch('2026/10/13',{dateMode:'minutes',withinMinutes:4},midnight));
+assert.equal(scanLowerBound({dateMode:'minutes',withinMinutes:10},midnight),Date.parse('2026-10-13T00:00:00+08:00'));
+assert(minuteMatch('3分钟前',{dateMode:'minutes',withinMinutes:5},now));
+assert.equal(updateValue({date:'2026/10/9',raw:{updated_at:'2026-10-14T11:59:00+08:00'}}),'2026-10-14T11:59:00+08:00');
+console.log('PASS unpadded/slash dates, invalid dates, leap day, China midnight window and precise timestamp preference');
