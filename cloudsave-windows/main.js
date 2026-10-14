@@ -2477,19 +2477,21 @@ else {
   app.on('second-instance', () => { if (mainWindow && !mainWindow.isDestroyed()) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); } });
   app.whenReady().then(() => { if (portableStorage) { const config = readConfig(); const migration = portableStorage.migrate(config); if (migration.changed) writeConfig(config); if (migration.failed) appendMonitorLog('部分旧登录凭据无法迁移，请在原电脑首次运行便携版后再搬移', 'warning'); } pan123Monitor=require('./pan123-main')({app,BrowserWindow,ipcMain,session,read:()=>readLocalCache('pan123-monitor.json'),write:data=>{const file=localCacheFile('pan123-monitor.json');fs.mkdirSync(path.dirname(file),{recursive:true});const fd=fs.openSync(file+'.tmp','w');try{fs.writeFileSync(fd,JSON.stringify(data),'utf8');fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(file+'.tmp',file);},readConfig,writeConfig,encrypt:encryptSecret,decrypt:decryptSecret,notify:(channel,value)=>{for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed())w.webContents.send(channel,value);},log:appendMonitorLog}); multiCloudModule=require('./multi-cloud-main')({BrowserWindow,ipcMain,session,readConfig,writeConfig,encrypt:encryptSecret,decrypt:decryptSecret,pan123:()=>pan123Monitor});setupShare115Monitor();for(const monitor of [guanyingMonitor,btbtlaMonitor,jyingMonitor,qmp4Monitor])monitor.d.magnetEnabled=()=>libraryMagnetEnabled(monitor.website); guangyaModule=require('./guangya-main')({app,BrowserWindow,ipcMain,session,readConfig,writeConfig,encrypt:encryptSecret,decrypt:decryptSecret,parse:parse115Json,flush:async()=>{if(jsonStore)await jsonStore.flush();},stopped:()=>shuttingDown,log:(message,level)=>appendMonitorLog(message,level,'','guangya')}); createWindow(); lifecycleTimers.push(setTimeout(syncCloudDownloads,15000)); lifecycleTimers.push(setInterval(syncCloudDownloads,60000));lifecycleTimers.push(setTimeout(repairCachedOfflinePlacements,20000));lifecycleTimers.push(setInterval(repairCachedOfflinePlacements,120000)); scheduleMonitor();qmp4Monitor.schedule();if(qmp4Monitor.state().enabled)lifecycleTimers.push(setTimeout(()=>qmp4Monitor.run(false),150000));jyingMonitor.schedule();if(jyingMonitor.state().enabled)lifecycleTimers.push(setTimeout(()=>jyingMonitor.run(false),120000));btbtlaMonitor.schedule();if(btbtlaMonitor.state().enabled)lifecycleTimers.push(setTimeout(()=>btbtlaMonitor.run(false),90000)); guanyingMonitor.schedule(); if(guanyingMonitor.state().enabled)lifecycleTimers.push(setTimeout(()=>guanyingMonitor.run(false),60000)); if (monitorConfig().enabled) lifecycleTimers.push(setTimeout(() => runMonitor(false), 30000)); });
 }
-let quittingAfterFlush = false;
+let quittingAfterFlush = false, quitFlushInFlight = false;
 if (jsonStore) app.on('before-quit', event => {
   if (quittingAfterFlush) return; event.preventDefault();
+  if (quitFlushInFlight) return;
+  quitFlushInFlight = true;
+  (async () => {
   shuttingDown = true;if(customShareParser?.window&&!customShareParser.window.isDestroyed())customShareParser.window.destroy(); multiCloudModule?.close();guangyaModule?.close();pan123Monitor?.close();share115Monitor?.close(); cloudSyncSchedule.close(); cloudSubmitSync.close(); browseCache.close(); scanExportCancelled = true; guanyingMonitor.close();btbtlaMonitor.close();btbtlaProvider?.close();jyingMonitor.close();jyingProvider?.close();qmp4Monitor.close();qmp4Provider?.close();haisouView?.webContents.close(); guanyingProvider?.close();
   if (monitorTimer) clearInterval(monitorTimer);
   if(filterProbeTimer)clearTimeout(filterProbeTimer);
   for (const timer of lifecycleTimers) { clearInterval(timer); clearTimeout(timer); }
   if (monitorPushTimer) { clearTimeout(monitorPushTimer); monitorPushTimer = null; }
-  (async () => {
     await Promise.allSettled([offlineOperationQueue, metadataQueue, cloudDownloadCache.running, cloudSubmitSync.running, pan123Monitor?.running,share115Monitor?.running,guangyaModule?.running, guanyingSessionManager?.close()]);
     while (monitorRunning || guanyingMonitor.running || btbtlaMonitor.running || btbtlaExportRunning || jyingMonitor.running || jyingExportRunning || qmp4Monitor.running || qmp4ExportRunning || guanyingExportRunning || placementCheckRunning || batchSubmitRunning || scanExportRunning) await waitResource(25);
     await jsonStore.close();
-  })().then(() => { quittingAfterFlush = true; app.quit(); }).catch(error => { dialog.showErrorBox('数据保存失败，尚未退出', error.message + '\n请检查磁盘空间后重试，避免丢失记录。'); });
+  })().then(() => { quittingAfterFlush = true; app.quit(); }).catch(error => { quitFlushInFlight = false; dialog.showErrorBox('数据保存失败，尚未退出', error.message + '\n请检查磁盘空间后重试，避免丢失记录。'); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
