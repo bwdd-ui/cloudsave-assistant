@@ -3,11 +3,11 @@ function bounded(task,ms,label,{signal,onTimeout}={}){
  let timer,abort;const guard=new Promise((_,reject)=>{
   timer=setTimeout(()=>{onTimeout?.();reject(Error(label+'超时，请重新加载或检查网站连接'));},ms);
   if(signal){abort=()=>reject(signal.reason || Error('读取已取消'));signal.addEventListener('abort',abort,{once:true});}
- });return Promise.race([Promise.resolve().then(task),guard]).finally(()=>{clearTimeout(timer);if(abort)signal.removeEventListener('abort',abort);});
+ });return Promise.race([Promise.resolve().then(()=>{if(signal?.aborted)throw signal.reason || Error('读取已取消');return task();}),guard]).finally(()=>{clearTimeout(timer);if(abort)signal.removeEventListener('abort',abort);});
 }
 class ReadQueue{
  constructor(){this.pending=[];this.busy=false;this.closed=false;}
- enqueue(run,priority=10,signal){if(this.closed)return Promise.reject(Error('读取已停止'));let job;return bounded(()=>new Promise((resolve,reject)=>{job={run,priority,resolve,reject,signal};this.pending.push(job);this.drain();}),90000,'等待网站读取',{signal,onTimeout:()=>{if(job)this.pending=this.pending.filter(x=>x!==job);}});}
+ enqueue(run,priority=10,signal){if(this.closed)return Promise.reject(Error('读取已停止'));let job;return bounded(()=>new Promise((resolve,reject)=>{if(this.closed){reject(Error('读取已停止'));return;}job={run,priority,resolve,reject,signal};this.pending.push(job);this.drain();}),90000,'等待网站读取',{signal,onTimeout:()=>{if(job)this.pending=this.pending.filter(x=>x!==job);}});}
  async drain(){if(this.busy)return;this.busy=true;try{while(this.pending.length){this.pending.sort((a,b)=>b.priority-a.priority);const job=this.pending.shift();if(job.signal?.aborted){job.reject(job.signal.reason || Error('读取已取消'));continue;}try{job.resolve(await job.run());}catch(e){job.reject(e);}}}finally{this.busy=false;}}
  close(){this.closed=true;for(const job of this.pending.splice(0))job.reject(Error('读取已停止'));}
 }

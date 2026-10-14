@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict'),{bounded,ReadQueue}=require('../site-reader');
+(async()=>{
+ let calls=0;
+ const queue=new ReadQueue(),pending=queue.enqueue(async()=>++calls);
+ queue.close();await assert.rejects(pending,/停止/);assert.equal(calls,0);assert.equal(queue.pending.length,0);
+ await assert.rejects(queue.enqueue(async()=>++calls),/停止/);assert.equal(calls,0);
+ const abort=new AbortController();
+ const cancelled=bounded(async()=>++calls,1000,'test',{signal:abort.signal});
+ abort.abort(Error('test cancelled'));await assert.rejects(cancelled,/test cancelled/);assert.equal(calls,0);
+ const live=new ReadQueue();let finish;
+ const active=live.enqueue(()=>new Promise(resolve=>{calls++;finish=resolve;}));
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,1);
+ const waiting=live.enqueue(async()=>++calls);live.close();
+ await assert.rejects(waiting,/停止/);finish('active-result');assert.equal(await active,'active-result');assert.equal(calls,1);
+ const next=new ReadQueue();const controller=new AbortController();
+ const aborted=next.enqueue(async()=>++calls,10,controller.signal);controller.abort(Error('queued cancelled'));
+ await assert.rejects(aborted,/queued cancelled/);assert.equal(calls,1);
+ assert.equal(await next.enqueue(async()=>++calls),2);next.close();
+ console.log('PASS same-tick close/abort suppress new requests, active work settles, fresh queue remains usable');
+})().catch(error=>{console.error(error);process.exitCode=1;});
