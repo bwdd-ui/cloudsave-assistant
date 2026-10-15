@@ -18,7 +18,7 @@ function fixture(mode='ok'){
 (async()=>{
  for(const mode of ['ok','delayed']){const f=fixture(mode);const receipt=await f.provider.receive(share,['10'],'42','cookie',{files:[folder]});assert(receipt.verification.verified);assert.equal(f.posts,1);assert.equal(receipt.verification.checked,2);}
  for(const mode of ['missing','hash','empty-folder','wrong-parent']){const f=fixture(mode);await assert.rejects(f.provider.receive(share,['10'],'42','cookie',{files:[folder]}),e=>e.uncertain&&e.serverResult.state===true);assert.equal(f.posts,1,'Never repeat POST on ambiguous verification');}
- const f=fixture();await assert.rejects(f.provider.receive(share,['10'],'42','cookie',{files:[folder],active:()=>{throw Error('stopped');}}),e=>e.uncertain);assert.equal(f.posts,1);
+ const f=fixture();let stopped=false;const request=f.provider.request;f.provider.request=async(...args)=>{const result=await request(...args);if(args[1]?.method==='POST')stopped=true;return result;};await assert.rejects(f.provider.receive(share,['10'],'42','cookie',{files:[folder],active:()=>{if(stopped)throw Error('stopped');}}),e=>e.uncertain);assert.equal(f.posts,1);
  for(const mode of ['ok','empty-folder']){
   const f=fixture(mode);let saved;
   const d={read:()=>saved,write:async v=>{saved=JSON.parse(JSON.stringify(v));},cookie:()=> 'synthetic',account:async()=>({uid:'u'}),validateFolder:async(_c,f)=>f,stopped:()=>false,wait:async()=>{},log(){},provider:f.provider,adapter:async()=>({filters:{},categories:['mv'],catalog:async()=>({items:[{id:'film',title:'Film'}],hasNext:false}),detail:async()=>({clouds:[{url:share.url,code:'abcd',title:'Share'}]})})};

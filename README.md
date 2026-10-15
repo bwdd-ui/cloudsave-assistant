@@ -59,6 +59,7 @@ node tests/run-tests.cjs
 ## 开发资料
 
 - [架构与移交说明](docs/ARCHITECTURE.md)
+- [Windows 1.2.14 分享监控停止边界修复](docs/RELEASE-1.2.14.md)
 - [Windows 1.2.13 大目录转存核验提速](docs/RELEASE-1.2.13.md)
 - [Windows 1.2.12 运行版本提示与重复启动保护](docs/RELEASE-1.2.12.md)
 - [Windows 1.2.11 转存目录核验说明](docs/RELEASE-1.2.11.md)

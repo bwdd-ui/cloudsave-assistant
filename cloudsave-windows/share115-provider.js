@@ -13,7 +13,7 @@ class Share115Provider{
  constructor({request,check,wait=ms=>new Promise(r=>setTimeout(r,ms))}){Object.assign(this,{request,check,wait});}
  async list(share,cookie,active,cid='0'){const rows=[],seen=new Set();let total=null;
   for(let offset=0,page=0;page<10000;page++){
-   active();if(page)await this.wait(1000);
+   active();if(page){await this.wait(1000);active();}
    const query=new URLSearchParams({share_code:share.shareCode,receive_code:share.receiveCode,cid:String(cid),limit:'100',offset:String(offset)});
    const result=await this.request('https://webapi.115.com/share/snap?'+query,{},cookie);active();this.check(result);
    const data=result.data,list=data?.list,count=Number(data?.count);
@@ -28,6 +28,7 @@ class Share115Provider{
  async size(share,rows,cookie,active){const result=await this.inspect(share,rows,cookie,active);if(!result.sizeKnown)throw Error('分享文件大小缺失，未通过大小筛选');return result.bytes;}
  async receive(share,ids,cid,cookie,{files,active=()=>{}}={}){
   if(!/^\d+$/.test(String(cid))||!ids.length||ids.some(id=>! /^[1-9]\d*$/.test(id)))throw Error('115转存目录或文件ID无效');
+  active();
   const body=new URLSearchParams({share_code:share.shareCode,receive_code:share.receiveCode,file_id:ids.join(','),cid:String(cid)});
   let result;try{result=await this.request('https://webapi.115.com/share/receive',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded',Referer:'https://115.com/'},body},cookie);}catch(error){throw Object.assign(Error('转存结果未确认，请核对115目标文件夹，避免重复转存：'+error.message),{uncertain:true});}
   if(!result||!['boolean'].includes(typeof result.state)&&typeof result.success!=='boolean')throw Object.assign(Error('115转存响应缺少明确结果，请核对目标文件夹后再处理'),{uncertain:true});
