@@ -26,13 +26,18 @@ class Share115Provider{
  }
  async inspect(share,rows,cookie,active){let bytes=0,nodes=0,sizeKnown=true;const seen=new Set(),files=[];const visit=async(items,depth)=>{if(depth>20)throw Error('分享目录层级过深，无法确认文件信息');for(const row of items){active();if(++nodes>100000)throw Error('分享文件过多，无法确认文件信息');const folder=String(row.fid||'0')==='0'&&!row.file_id;if(folder){if(seen.has(row.id))throw Error('分享目录重复，无法确认文件信息');seen.add(row.id);await this.wait(1000);await visit(await this.list(share,cookie,active,row.id),depth+1);}else{files.push(row);const value=Number(row.s??row.file_size??row.size);if(!Number.isFinite(value)||value<0)sizeKnown=false;else bytes+=value;}}};await visit(rows,0);return {bytes,sizeKnown,files};}
  async size(share,rows,cookie,active){const result=await this.inspect(share,rows,cookie,active);if(!result.sizeKnown)throw Error('分享文件大小缺失，未通过大小筛选');return result.bytes;}
- async receive(share,ids,cid,cookie){
+ async receive(share,ids,cid,cookie,{files,active=()=>{}}={}){
   if(!/^\d+$/.test(String(cid))||!ids.length||ids.some(id=>! /^[1-9]\d*$/.test(id)))throw Error('115转存目录或文件ID无效');
   const body=new URLSearchParams({share_code:share.shareCode,receive_code:share.receiveCode,file_id:ids.join(','),cid:String(cid)});
   let result;try{result=await this.request('https://webapi.115.com/share/receive',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded',Referer:'https://115.com/'},body},cookie);}catch(error){throw Object.assign(Error('转存结果未确认，请核对115目标文件夹，避免重复转存：'+error.message),{uncertain:true});}
   if(!result||!['boolean'].includes(typeof result.state)&&typeof result.success!=='boolean')throw Object.assign(Error('115转存响应缺少明确结果，请核对目标文件夹后再处理'),{uncertain:true});
   if(result.state===false||result.success===false)throw Error(String(result.error||result.error_msg||result.msg||result.message||'115未接受转存请求'));
-  this.check(result);return result;
+  this.check(result);
+  if(files){
+   try{const verification=await require('./share115-verify').verifySavedShare({request:this.request,check:this.check,source:this.list.bind(this),wait:this.wait,share,rows:files,cid,cookie,active});return {...result,verification};}
+   catch(error){throw Object.assign(Error('115接口已接受，但目标目录保存未核验通过：'+error.message+'；请核对后处理，未自动重复转存'),{uncertain:true,serverResult:Object.fromEntries(['state','success','code','errno'].filter(key=>['boolean','number','string'].includes(typeof result[key])).map(key=>[key,result[key]]))});}
+  }
+  return result;
  }
 }
 module.exports={Share115Provider,parseShare,itemId};

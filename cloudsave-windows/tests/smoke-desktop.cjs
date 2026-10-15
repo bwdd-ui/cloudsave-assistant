@@ -60,6 +60,11 @@ app.whenReady().then(async () => {
   assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#cloudLibraryGrid .cloud-poster-card').length"),11);
   assert.equal(await win.webContents.executeJavaScript("document.getElementById('cloudNext').disabled"),true);
   fs.writeFileSync(path.join(output,'filtered-library.png'),(await win.webContents.capturePage()).toPNG());
+  ipcMain.removeHandler('share115-state');
+  ipcMain.handle('share115-state',()=>({tasks:[],logs:[],running:false,records:[{id:'legacy',site:'qmp4',title:'历史接口接受记录',status:'accepted',verified:false,message:'接口已接受',count:1,folderName:'测试目录',at:Date.now()}]}));
+  await win.webContents.executeJavaScript("document.getElementById('showShare115Logs').click();void 0;");await new Promise(resolve=>setTimeout(resolve,150));
+  assert((await win.webContents.executeJavaScript("document.getElementById('share115Records').textContent")).includes('目录未核验'));
+  assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#share115Records [data-action=retry]').length"),1);
   // Verify the reorganized navigation using the actual existing handlers.
   const hasLayout = await win.webContents.executeJavaScript("Boolean(document.querySelector('.workspace-bar'))");
   if (hasLayout) {
@@ -72,7 +77,7 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript("document.getElementById('closeSettings').click();void 0;"); await new Promise(resolve => setTimeout(resolve, 80));
     assert.equal(await win.webContents.executeJavaScript("document.querySelector('.side-nav .nav-btn.active').id"), 'showMonitorFilter', 'Settings returns to the previous workspace');
   }
-  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800], filteredLibraryPages: true }));
+  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800], filteredLibraryPages: true, legacyTransferUnverified: true }));
   await win.webContents.executeJavaScript('window.cloudsave.backgroundSettings({closeToTray:false})');
   app.quit();
 }).catch(error => { console.error(error); fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: false, error: error.stack })); app.exit(1); });
