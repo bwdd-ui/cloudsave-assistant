@@ -59,6 +59,7 @@ node tests/run-tests.cjs
 ## 开发资料
 
 - [架构与移交说明](docs/ARCHITECTURE.md)
+- [Windows 1.2.25 相对日期筛选边界修复](docs/RELEASE-1.2.25.md)
 - [Windows 1.2.24 读取超时清理异常保护](docs/RELEASE-1.2.24.md)
 - [Windows 1.2.23 云下载同步计划竞态修复](docs/RELEASE-1.2.23.md)
 - [Windows 1.2.22 筛选分页缓存容量修复](docs/RELEASE-1.2.22.md)
