@@ -59,6 +59,7 @@ node tests/run-tests.cjs
 ## 开发资料
 
 - [架构与移交说明](docs/ARCHITECTURE.md)
+- [Windows 1.2.13 大目录转存核验提速](docs/RELEASE-1.2.13.md)
 - [Windows 1.2.12 运行版本提示与重复启动保护](docs/RELEASE-1.2.12.md)
 - [Windows 1.2.11 转存目录核验说明](docs/RELEASE-1.2.11.md)
 - `cloudsave-windows` 中包含完整运行源码、锁定依赖清单、测试和各功能开发说明。
