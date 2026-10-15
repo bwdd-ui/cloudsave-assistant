@@ -1,6 +1,8 @@
 const {randomUUID,createHash}=require('crypto'),{parseShare}=require('./share115-provider');
 const history=require('./share-save-history'),cloudNames={...require('./multi-cloud-provider').NAMES,'115':'115',guangya:'光鸭'};
 const cloudPrefix=task=>task.destination&&task.destination!=='115'?task.destination+'|':'';
+// Legacy or malformed deadlines are due now, consistently across wake-up and selection.
+const nextRunAt=task=>{const value=Number(task.nextRun);return Number.isFinite(value)&&value>0?value:0;};
 const SITES=['butailing','guanying','btbtla','jying','qmp4','custom'];
 class Share115Monitor{
  constructor(d){this.d=d;this.data=d.read()||{version:1,tasks:[],items:{},transactions:{}};if(this.data.version!==1||!Array.isArray(this.data.tasks)||!this.data.items||!this.data.transactions)throw Error('115分享记录格式异常');this.data.shares||={};this.data.shareFiles||={};this.data.scannedLinks||={};history.migrate(this.data);this.runs=new Map();this.cancelledIds=new Set();this.linkLocks=new Map();this.writeTail=Promise.resolve();this.timer=null;this.closed=false;}
@@ -21,13 +23,13 @@ class Share115Monitor{
  async remove(id){if(this.runs.has(id))throw Error('请先停止扫描');this.data.tasks=this.data.tasks.filter(x=>x.id!==id);await this.persist();this.arm();return this.state();}
  stop(id){for(const key of this.runs.keys())if(!id||key===id)this.cancelledIds.add(key);return this.state();}
  close(){this.closed=true;this.stop();clearTimeout(this.timer);}
- arm(){clearTimeout(this.timer);if(this.closed||this.d.stopped()||this.d.enabled?.()===false)return;const rows=this.data.tasks.filter(x=>x.enabled&&!this.runs.has(x.id)&&this.d.siteEnabled?.(x.site)!==false);if(!rows.length)return;const due=Math.min(...rows.map(x=>x.nextRun||0));this.timer=setTimeout(()=>this.run().catch(()=>{}),Math.max(1000,due-Date.now()));this.timer.unref?.();}
+ arm(){clearTimeout(this.timer);if(this.closed||this.d.stopped()||this.d.enabled?.()===false)return;const rows=this.data.tasks.filter(x=>x.enabled&&!this.runs.has(x.id)&&this.d.siteEnabled?.(x.site)!==false);if(!rows.length)return;const due=Math.min(...rows.map(nextRunAt));this.timer=setTimeout(()=>this.run().catch(()=>{}).finally(()=>this.arm()),Math.min(2147483647,Math.max(1000,due-Date.now())));this.timer.unref?.();}
  run(id){if(this.closed||this.d.enabled?.()===false)return Promise.reject(Error('网盘保存监控已关闭'));if(id&&this.d.siteEnabled?.(this.data.tasks.find(x=>x.id===id)?.site)===false)return Promise.reject(Error('该资源库的网盘分享监控已关闭'));
-  if(!id){const due=this.data.tasks.filter(t=>t.enabled&&this.d.siteEnabled?.(t.site)!==false&&t.nextRun<=Date.now());return Promise.allSettled(due.map(t=>this.run(t.id))).then(()=>this.state());}
+  if(!id){const due=this.data.tasks.filter(t=>t.enabled&&this.d.siteEnabled?.(t.site)!==false&&nextRunAt(t)<=Date.now());return Promise.allSettled(due.map(t=>this.run(t.id))).then(()=>this.state());}
   if(this.runs.has(id))return this.runs.get(id);if(!this.data.tasks.some(t=>t.id===id))return Promise.reject(Error('任务不存在'));this.cancelledIds.delete(id);
   const work=Promise.resolve().then(()=>this.scan(id)).finally(()=>{this.runs.delete(id);this.cancelledIds.delete(id);this.d.publish?.(this.state());this.arm();}).then(()=>this.state());this.runs.set(id,work);this.d.publish?.(this.state());this.arm();return work;
  }
- async scan(id){for(const task of this.data.tasks.filter(x=>id?x.id===id:x.enabled&&this.d.siteEnabled?.(x.site)!==false&&x.nextRun<=Date.now())){
+ async scan(id){for(const task of this.data.tasks.filter(x=>id?x.id===id:x.enabled&&this.d.siteEnabled?.(x.site)!==false&&nextRunAt(x)<=Date.now())){
   let copied=0,scanned=0,found=0,skipped=0,failed=0,pages=0;const backend=this.d.backend?.(task)||(!task.destination||task.destination==='115'?this.d:null);if(!backend)throw Error('目标网盘未初始化，本轮未提交');const cookie=backend.cookie();this.event(task,'开始扫描资源网站的115分享；目标文件夹：'+task.folder.name);await this.persist();
   const active=()=>{if(this.cancelledIds.has(task.id)||this.closed||this.d.stopped()||this.d.enabled?.()===false||this.d.siteEnabled?.(task.site)===false||cookie!==backend.cookie())throw Error('115分享监控已停止或账号更换');};
   try{
