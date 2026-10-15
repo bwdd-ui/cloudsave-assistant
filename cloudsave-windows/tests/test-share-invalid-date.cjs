@@ -1,0 +1,6 @@
+const assert=require('node:assert/strict'),{dayTime,decide}=require('../share115-filters');
+const now=Date.parse('2026-03-02T12:00:00+08:00');
+for(const value of ['2026-02-30','2026/2/30','2026年2月30日','2026-02-30T09:00:00+08:00','2026-02-30t09:00:00z','2026-02-30Z','2025-02-29','2026-04-31','2026/6/31 08:00:00','2026-13-01','2026-00-01','2026-02-00']){assert.equal(dayTime(value,now),0,value+' must not roll into another day');assert(!decide({withinDays:36500},{date:value},0,now).allowed);}
+for(const value of ['2024-02-29','2024/2/29','2024年2月29日','2024-02-29T09:00:00+08:00','2026-03-01','2026/3/1','2026年3月1日'])assert(dayTime(value,now)>0,value+' remains valid');
+assert(decide({withinDays:7},{date:'2026-03-01T12:00:00+08:00'},0,now).allowed);assert(decide({withinDays:1},{date:'昨天'},0,now).allowed);assert(decide({withinDays:1},{date:'24小时前'},0,now).allowed);assert(!decide({withinDays:7},{date:'not-a-date'},0,now).allowed);assert(decide({withinDays:0},{date:'2026-02-30'},0,now).allowed,'Disabling the date filter keeps its existing behavior');
+console.log('PASS impossible calendar dates rejected across dash/slash/Chinese/timestamp formats, valid leap days retained, relative and disabled date filters unchanged');
