@@ -1,8 +1,8 @@
 function bounded(task,ms,label,{signal,onTimeout,onAbort}={}){
  if(signal?.aborted)return Promise.reject(signal.reason || Error('读取已取消'));
  let timer,abort;const guard=new Promise((_,reject)=>{
-  timer=setTimeout(()=>{onTimeout?.();reject(Error(label+'超时，请重新加载或检查网站连接'));},ms);
-  if(signal){abort=()=>{onAbort?.();reject(signal.reason || Error('读取已取消'));};signal.addEventListener('abort',abort,{once:true});}
+  timer=setTimeout(()=>{const error=Error(label+'超时，请重新加载或检查网站连接');try{onTimeout?.();}catch(cause){error.cause=cause;}reject(error);},ms);
+  if(signal){abort=()=>{try{onAbort?.();}catch(_){}reject(signal.reason || Error('读取已取消'));};signal.addEventListener('abort',abort,{once:true});}
  });return Promise.race([Promise.resolve().then(()=>{if(signal?.aborted)throw signal.reason || Error('读取已取消');return task();}),guard]).finally(()=>{clearTimeout(timer);if(abort)signal.removeEventListener('abort',abort);});
 }
 class ReadQueue{
