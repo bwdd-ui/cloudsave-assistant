@@ -4,12 +4,17 @@ function syncPreferences(value={}) {
   return {enabled:value.enabled!==false,intervalMinutes:minutes};
 }
 class CloudSyncSchedule {
-  constructor({state,sync,stopped=()=>false,now=Date.now,setTimer=setTimeout,clearTimer=clearTimeout}){Object.assign(this,{state,sync,stopped,now,setTimer,clearTimer});}
+  constructor({state,sync,stopped=()=>false,now=Date.now,setTimer=setTimeout,clearTimer=clearTimeout}){Object.assign(this,{state,sync,stopped,now,setTimer,clearTimer});this.generation=0;}
   arm(){this.close();if(this.stopped())return;const state=this.state();if(!state.enabled||!state.uid)return;
     const delay=Math.max(1000,(state.nextSyncAt||this.now())-this.now());
-    this.timer=this.setTimer(()=>{this.timer=null;if(this.stopped())return;Promise.resolve().then(()=>this.sync()).finally(()=>this.arm()).catch(()=>{});},delay);
+    const generation=this.generation;
+    this.timer=this.setTimer(()=>{
+      if(generation!==this.generation)return;
+      this.timer=null;if(this.stopped())return;
+      return Promise.resolve().then(()=>{if(generation===this.generation&&!this.stopped())return this.sync();}).finally(()=>{if(generation===this.generation)this.arm();}).catch(()=>{});
+    },delay);
     this.timer?.unref?.();
   }
-  close(){if(this.timer!=null)this.clearTimer(this.timer);this.timer=null;}
+  close(){this.generation++;if(this.timer!=null)this.clearTimer(this.timer);this.timer=null;}
 }
 module.exports={syncPreferences,CloudSyncSchedule};

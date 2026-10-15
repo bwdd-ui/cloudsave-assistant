@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict'),{CloudSyncSchedule}=require('../cloud-sync-schedule');
+(async()=>{let calls=0,release,started,interval=60000;const timers=[];const scheduler=new CloudSyncSchedule({now:()=>100000,state:()=>({enabled:true,uid:'synthetic',nextSyncAt:100000+interval}),sync:async()=>{calls++;started?.();if(release===null)await new Promise(r=>release=r);},setTimer:(fn,delay)=>{const timer={fn,delay,unref(){}};timers.push(timer);return timer;},clearTimer:timer=>timer.cleared=true});
+ scheduler.arm();const obsolete=timers.at(-1);scheduler.close();await obsolete.fn();assert.equal(calls,0);assert.equal(scheduler.timer,null);
+ scheduler.arm();const microtask=timers.at(-1).fn();scheduler.close();await microtask;assert.equal(calls,0,'Close after timer fires but before microtask prevents sync');assert.equal(scheduler.timer,null);
+ release=null;let enter;const entered=new Promise(r=>enter=r);started=enter;scheduler.arm();const running=timers.at(-1).fn();await entered;assert.equal(calls,1);interval=120000;scheduler.arm();const latest=timers.at(-1),count=timers.length;release();await running;assert.equal(scheduler.timer,latest,'Old completion cannot replace newer settings timer');assert.equal(timers.length,count);assert.equal(latest.delay,120000);
+ scheduler.close();await latest.fn();assert.equal(calls,1);
+ release=null;let enterAgain;const enteredAgain=new Promise(r=>enterAgain=r);started=enterAgain;scheduler.arm();const closing=timers.at(-1).fn();await enteredAgain;scheduler.close();const before=timers.length;release();await closing;assert.equal(scheduler.timer,null);assert.equal(timers.length,before,'Closing an in-flight sync does not rearm');
+ scheduler.arm();const stoppedTimer=timers.at(-1);scheduler.stopped=()=>true;await stoppedTimer.fn();assert.equal(scheduler.timer,null,'Stopped current timer releases its reference');scheduler.close();
+ console.log('PASS stale timers and closed microtasks start no sync; in-flight completion cannot overwrite newer schedule or rearm after close');
+})().catch(error=>{console.error(error);process.exitCode=1;});
