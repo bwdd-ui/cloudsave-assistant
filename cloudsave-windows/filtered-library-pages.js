@@ -1,13 +1,16 @@
 // Apply the predicate to the globally ordered catalogue before slicing UI pages.
 class FilteredLibraryPages {
  constructor({now=Date.now,ttl=300000,limit=8}={}){Object.assign(this,{now,ttl,limit});this.scopes=new Map();}
+ trim(keep){for(const [key,state] of this.scopes){if(this.scopes.size<=this.limit)break;if(key!==keep&&!state.running)this.scopes.delete(key);}}
  async get(key,page,read,match,stopped=()=>false){
   let state=this.scopes.get(key);
   if(!state||(!state.running&&this.now()-state.time>this.ttl)){
    state={time:this.now(),rows:[],seen:new Set(),signatures:new Set(),next:1,limit:0,complete:false,nativeItemCount:0};
    this.scopes.delete(key);this.scopes.set(key,state);
-   if(this.scopes.size>this.limit)for(const [old,value] of this.scopes){if(old!==key&&!value.running){this.scopes.delete(old);break;}}
+   this.trim(key);
   }
+  // Promote reused filters without removing any in-flight state.
+  this.scopes.delete(key);this.scopes.set(key,state);
   const previous=state.running||Promise.resolve();
   const work=previous.catch(()=>{}).then(async()=>{
    // One extra match determines whether a next display page actually exists.
@@ -28,7 +31,7 @@ class FilteredLibraryPages {
    return {page:actual,items:state.rows.slice(start,end),limit:state.limit,total:state.complete?state.rows.length:end+(hasNext?1:0),hasNext,totalKnown:state.complete,matchedCached:state.rows.length,nativeItemCount:state.nativeItemCount,nativeFiltered:true,filteredPagination:true};
   });
   state.running=work;
-  try{return await work;}finally{if(state.running===work)state.running=null;}
+  try{return await work;}finally{if(state.running===work){state.running=null;this.trim([...this.scopes.keys()].at(-1));}}
  }
 }
 module.exports={FilteredLibraryPages};

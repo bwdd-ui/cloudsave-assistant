@@ -59,6 +59,7 @@ node tests/run-tests.cjs
 ## 开发资料
 
 - [架构与移交说明](docs/ARCHITECTURE.md)
+- [Windows 1.2.22 筛选分页缓存容量修复](docs/RELEASE-1.2.22.md)
 - [Windows 1.2.21 取消读取队列清理](docs/RELEASE-1.2.21.md)
 - [Windows 1.2.20 资源缓存异常恢复](docs/RELEASE-1.2.20.md)
 - [Windows 1.2.19 失败海报加载退避](docs/RELEASE-1.2.19.md)
