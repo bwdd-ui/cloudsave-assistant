@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict'),{Share115Monitor}=require('../share115-monitor');
+let messageReads=0;const monitor=new Share115Monitor({read:()=>null,write:async()=>{},stopped:()=>false,log(){}});
+monitor.data.tasks=[{id:'current',name:'当前任务名'}];
+monitor.data.logs=Array.from({length:500},()=>({site:'qmp4',time:1000,taskId:'legacy',taskName:'旧任务',get message(){messageReads++;return '提交 Film Folder';}}));
+monitor.data.transactions=Object.fromEntries(Array.from({length:150},(_,i)=>['r'+i,{id:'r'+i,monitorTaskId:'current',taskName:'保存时任务名',site:'qmp4',at:1000+i,title:'Film',folderName:'Folder',keys:['a','b']}]));
+let state=monitor.state();assert.equal(state.records.length,100);assert.equal(state.records[0].id,'r149');assert.equal(state.records[99].id,'r50');assert.equal(state.records[0].count,2);assert.equal(state.records[0].taskName,'保存时任务名');assert.equal(messageReads,0,'Modern records never scan log messages');
+delete monitor.data.transactions.r149.taskName;state=monitor.state();assert.equal(state.records[0].taskName,'当前任务名');assert.equal(messageReads,0,'Known current task resolves without scanning');
+monitor.data.transactions.old={id:'old',site:'qmp4',at:2000,title:'Film',folderName:'Folder',keys:['a']};state=monitor.state();assert.equal(state.records[0].monitorTaskId,'legacy');assert.equal(state.records[0].taskName,'旧任务');assert(messageReads>0,'Incomplete legacy record still resolves');
+monitor.data.logs.push({site:'qmp4',time:2000,taskId:'another',taskName:'另一任务',message:'提交 Film Folder'});state=monitor.state();assert.equal(state.records[0].monitorTaskId,'');assert.equal(state.records[0].taskName,'历史任务（未记录名称）','Ambiguous logs never invent ownership');
+monitor.close();console.log('PASS 100 modern records across 500 logs require zero message reads; task names, ordering, counts and unambiguous legacy inference preserved');

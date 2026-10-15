@@ -8,7 +8,20 @@ class Share115Monitor{
  constructor(d){this.d=d;this.data=d.read()||{version:1,tasks:[],items:{},transactions:{}};if(this.data.version!==1||!Array.isArray(this.data.tasks)||!this.data.items||!this.data.transactions)throw Error('115分享记录格式异常');this.data.shares||={};this.data.shareFiles||={};this.data.scannedLinks||={};history.migrate(this.data);this.runs=new Map();this.cancelledIds=new Set();this.linkLocks=new Map();this.writeTail=Promise.resolve();this.timer=null;this.closed=false;}
  get running(){return this.runs.size?Promise.allSettled([...this.runs.values()]):null;}
  get activeId(){return this.runs.keys().next().value||'';}
- state(){return {tasks:this.data.tasks.map(t=>({...t,running:this.runs.has(t.id)})),runningIds:[...this.runs.keys()],logs:this.data.logs||[],running:Boolean(this.runs.size),activeId:this.activeId,records:Object.values(this.data.transactions).sort((a,b)=>b.at-a.at).slice(0,100).map(({keys,...row})=>{const task=this.data.tasks.find(t=>t.id===row.monitorTaskId);const candidates=(this.data.logs||[]).filter(x=>x.site===row.site&&Math.abs(x.time-row.at)<10000&&String(x.message).includes('提交')&&String(x.message).includes(row.title)&&String(x.message).includes(row.folderName));const legacy=new Set(candidates.map(x=>x.taskId)).size===1?candidates[0]:null;return {...row,monitorTaskId:row.monitorTaskId||legacy?.taskId||'',taskName:row.taskName||task?.name||legacy?.taskName||'历史任务（未记录名称）',count:keys.length};})};}
+ state(){
+  const tasks=new Map(this.data.tasks.map(task=>[task.id,task])),logs=this.data.logs||[];
+  const records=Object.values(this.data.transactions).sort((a,b)=>b.at-a.at).slice(0,100).map(({keys,...row})=>{
+   const task=tasks.get(row.monitorTaskId);let legacy=null;
+   // Modern transactions already carry identity; only inspect logs for incomplete legacy records.
+   if(!row.monitorTaskId||!(row.taskName||task?.name)){
+    const candidates=logs.filter(x=>x.site===row.site&&Math.abs(x.time-row.at)<10000&&String(x.message).includes('提交')&&String(x.message).includes(row.title)&&String(x.message).includes(row.folderName));
+    if(new Set(candidates.map(x=>x.taskId)).size===1)legacy=candidates[0];
+   }
+   return {...row,monitorTaskId:row.monitorTaskId||legacy?.taskId||'',taskName:row.taskName||task?.name||legacy?.taskName||'历史任务（未记录名称）',count:keys.length};
+  });
+  return {tasks:this.data.tasks.map(t=>({...t,running:this.runs.has(t.id)})),runningIds:[...this.runs.keys()],logs,running:Boolean(this.runs.size),activeId:this.activeId,records};
+ }
+
  event(task,message,level='info'){if(task.destination&&task.destination!=='115')message=message.replace(/115/g,cloudNames[task.destination]||task.destination); const entry={time:Date.now(),taskId:task.id,taskName:task.name||task.site,site:task.site,level,message,destination:task.destination||'115'};this.data.logs=[...(this.data.logs||[]),entry].slice(-500);this.d.log((cloudNames[task.destination||'115']+'保存监控 [')+entry.taskName+'] '+message,level,task.site);this.d.publish?.(this.state());}
  async persist(){const write=this.writeTail.then(()=>this.d.write(this.data));this.writeTail=write.catch(()=>{});await write;this.d.publish?.(this.state());}
  async save(value){
