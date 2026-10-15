@@ -29,6 +29,9 @@
   const bar = document.createElement('header'); bar.className = 'workspace-bar';
   bar.innerHTML = '<div class="workspace-context"><span class="workspace-eyebrow"></span><strong class="workspace-title"></strong></div><div class="workspace-actions"><button class="btn secondary workspace-related" hidden></button><button class="btn secondary" data-workspace-nav="showOfflineTasks">离线任务</button><button class="btn secondary" data-workspace-nav="showShare115Logs">任务日志</button><button class="btn secondary" data-workspace-nav="showSettings">设置</button></div><div class="workspace-monitor-jumps" hidden><button type="button" data-monitor-jump="magnet">磁力监控</button><button type="button" data-monitor-jump="cloud">网盘任务</button><span>两套监控可分别配置和启停</span></div>';
   main.prepend(bar);
+  const version = document.createElement('span'); version.className = 'workspace-version';
+  version.title = '当前正在运行的程序版本'; bar.querySelector('.workspace-context').append(version);
+  window.cloudsave?.runtimeVersion?.().then(value => { version.textContent = 'v' + value; }).catch(() => { version.textContent = '版本读取失败'; });
   // Keep the cloud's actual download state separate from local submission counts.
   // Move existing nodes so their values, focus and registered handlers survive.
   const historyTools = document.querySelector('#offlineHistoryPane .offline-history-tools');

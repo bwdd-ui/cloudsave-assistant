@@ -6,6 +6,9 @@ const persistentRuntime = app.isPackaged || Boolean(process.env?.CLOUDSAVE_STORA
 const portableStorage = persistentRuntime
   ? require('./portable-storage').createPortableStorage(app, safeStorage, process.env.CLOUDSAVE_STORAGE_ROOT || process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath)) : null;
 
+const applicationVersion = require('./package.json').version;
+const ownsApplicationLock = require('./startup-instance').acquireInstance(app, dialog, applicationVersion);
+if (!ownsApplicationLock) app.exit(0);
 const jsonStore = persistentRuntime ? new (require('./buffered-json').BufferedJson)(1200) : null;
 let configCache;
 let configCheckedAt = 0;
@@ -2071,6 +2074,7 @@ function createWindow() {
   mainWindow.on('closed',()=>{if(process.platform!=='darwin')app.quit();});
 }
 
+ipcMain.handle('runtime-version', () => applicationVersion);
 ipcMain.handle('background-settings',(_event,value)=>backgroundWindow?.settings(value) || {closeToTray:true,minimizeToTray:false,trayAvailable:false});
 ipcMain.handle('get-library-preferences', () => readConfig().libraryPreferences || { searchHistory: [], posterWidth: 130 });
 ipcMain.handle('set-library-preferences', (_event, preferences = {}) => {
@@ -2476,7 +2480,7 @@ ipcMain.handle('batch-submit-magnets', async (_event, raw) => {
 });
 ipcMain.handle('logout', () => { const config = readConfig(); delete config.cookie; delete config.folder; writeConfig(config); return true; });
 
-const ownsApplicationLock = !app.requestSingleInstanceLock || app.requestSingleInstanceLock();
+
 if (!ownsApplicationLock) app.quit();
 else {
   app.on('second-instance', () => { if (mainWindow && !mainWindow.isDestroyed()) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); } });

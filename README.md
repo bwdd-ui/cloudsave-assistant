@@ -59,6 +59,7 @@ node tests/run-tests.cjs
 ## 开发资料
 
 - [架构与移交说明](docs/ARCHITECTURE.md)
+- [Windows 1.2.12 运行版本提示与重复启动保护](docs/RELEASE-1.2.12.md)
 - [Windows 1.2.11 转存目录核验说明](docs/RELEASE-1.2.11.md)
 - `cloudsave-windows` 中包含完整运行源码、锁定依赖清单、测试和各功能开发说明。
 - Excel 列顺序：名称、资源大小、上映时间、磁力链接、磁力名称、时长、分辨率、帧率、视频、音频、类型、制片国家/地区。

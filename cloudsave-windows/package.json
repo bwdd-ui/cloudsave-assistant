@@ -1,6 +1,6 @@
 {
   "name": "cloudsave-windows",
-  "version": "1.2.11",
+  "version": "1.2.12",
   "description": "云存助手：资源浏览、磁力采集与网盘保存监控 Windows 桌面客户端",
   "main": "main.js",
   "author": "CloudSave",
@@ -94,7 +94,8 @@
       "ui-runtime.js",
       "workspace-layout.js",
       "filtered-library-pages.js",
-      "share115-verify.js"
+      "share115-verify.js",
+      "startup-instance.js"
     ]
   }
 }

@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('cloudsave', {
+  runtimeVersion:()=>ipcRenderer.invoke('runtime-version'),
   guangyaState:()=>ipcRenderer.invoke('guangya-state'),guangyaLogin:()=>ipcRenderer.invoke('guangya-login'),guangyaFolders:parent=>ipcRenderer.invoke('guangya-folders',parent),guangyaFolder:value=>ipcRenderer.invoke('guangya-folder',value),guangyaSubmit:(url,title)=>ipcRenderer.invoke('guangya-submit',url,title),guangyaResolve:(id,action)=>ipcRenderer.invoke('guangya-resolve',id,action),guangyaLogout:()=>ipcRenderer.invoke('guangya-logout'),
   backgroundSettings:value=>ipcRenderer.invoke('background-settings',value),btbtlaSeedDate:row=>ipcRenderer.invoke('btbtla-seed-date',row),onBrowseCatalogUpdated:callback=>ipcRenderer.on('browse-catalog-updated',(_event,value)=>callback(value)),
   onCloudDownloadProgress:callback=>ipcRenderer.on('cloud-download-progress',(_event,state)=>callback(state)),

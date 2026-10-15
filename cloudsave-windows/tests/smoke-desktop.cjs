@@ -20,6 +20,9 @@ app.whenReady().then(async () => {
   assert(win, 'Application window');
   const dom = await win.webContents.executeJavaScript(`({api:typeof window.cloudsave,ui:typeof window.cloudsaveUI,nav:document.body.innerText.includes('不太灵'),errors:document.querySelectorAll('script[src]').length})`);
   console.log('DOM:', JSON.stringify(dom)); assert.equal(dom.api, 'object'); assert.equal(dom.ui, 'object'); assert(dom.nav);
+  const expectedVersion=require('../package.json').version;
+  for(let attempt=0;attempt<30;attempt++){if(await win.webContents.executeJavaScript("document.querySelector('.workspace-version')?.textContent") === 'v'+expectedVersion)break;await new Promise(r=>setTimeout(r,100));}
+  assert.equal(await win.webContents.executeJavaScript("document.querySelector('.workspace-version')?.textContent"),'v'+expectedVersion);
   const fixture = new BrowserWindow({ show: false, width: 900, height: 600, webPreferences: { contextIsolation: false, nodeIntegration: false, backgroundThrottling: false } });
   await fixture.loadURL('data:text/html,<div id="grid"></div>');
   fixture.setPosition(-20000, 0); fixture.showInactive();
