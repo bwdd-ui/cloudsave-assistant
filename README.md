@@ -59,6 +59,7 @@ node tests/run-tests.cjs
 ## 开发资料
 
 - [架构与移交说明](docs/ARCHITECTURE.md)
+- [Windows 1.2.18 资源库首次加载刷新优化](docs/RELEASE-1.2.18.md)
 - [Windows 1.2.17 未提交记录状态修复](docs/RELEASE-1.2.17.md)
 - [Windows 1.2.16 监控状态刷新减负](docs/RELEASE-1.2.16.md)
 - [Windows 1.2.15 网盘监控旧任务调度恢复](docs/RELEASE-1.2.15.md)
