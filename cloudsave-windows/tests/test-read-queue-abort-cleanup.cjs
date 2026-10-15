@@ -1,0 +1,8 @@
+const assert=require('node:assert/strict'),{ReadQueue,bounded}=require('../site-reader');
+(async()=>{const queue=new ReadQueue();let release,entered;const started=new Promise(resolve=>entered=resolve),hold=new Promise(resolve=>release=resolve);const first=queue.enqueue(async()=>{entered();await hold;return 'first';});await started;
+ let executed=0;const controllers=Array.from({length:100},()=>new AbortController()),reason=Error('synthetic stopped');const waiting=controllers.map(controller=>queue.enqueue(()=>{executed++;},10,controller.signal));const settled=Promise.allSettled(waiting);await Promise.resolve();await Promise.resolve();assert.equal(queue.pending.length,100);
+ controllers.forEach(controller=>controller.abort(reason));const results=await settled;assert(results.every(result=>result.status==='rejected'&&result.reason===reason));assert.equal(queue.pending.length,0,'Aborted queued readers are removed while the first job still runs');assert.equal(executed,0);assert(queue.busy);
+ const next=queue.enqueue(()=>{executed++;return 'next';});await Promise.resolve();await Promise.resolve();assert.equal(queue.pending.length,1);release();assert.equal(await first,'first');assert.equal(await next,'next');assert.equal(executed,1);queue.close();
+ const already=new AbortController();already.abort(reason);let calls=0;await assert.rejects(bounded(()=>{calls++;},1000,'test',{signal:already.signal}),error=>error===reason);assert.equal(calls,0);
+ console.log('PASS 100 canceled readers leave pending queue immediately behind a blocked read; original reason preserved, next live job executes, pre-aborted work never starts');
+})().catch(error=>{console.error(error);process.exitCode=1;});
