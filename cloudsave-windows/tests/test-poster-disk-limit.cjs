@@ -1,0 +1,8 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto'),{PosterCache}=require('../poster-cache');
+(async()=>{const root=fs.mkdtempSync(path.join(os.tmpdir(),'cloudsave-poster-disk-limit-')),url='https://images.invalid/synthetic.png',file=path.join(root,crypto.createHash('sha256').update(url).digest('hex')+'.json'),read=fs.readFileSync;let reads=0,fetches=0;
+ try{const fd=fs.openSync(file,'w');fs.ftruncateSync(fd,8*1024*1024);fs.closeSync(fd);
+ fs.readFileSync=function(target,...args){if(target===file){reads++;assert(fs.statSync(file).size<=7200000,'Oversized cache must be rejected before readFileSync');}return read.call(this,target,...args);};
+ const cache=new PosterCache({root,fetcher:async()=>{fetches++;return new Response(Uint8Array.from([1,2,3]),{headers:{'content-type':'image/png'}});}});const data=await cache.load(url);assert.equal(reads,0);assert.equal(fetches,1);assert.match(data,/^data:image\/png;base64,/);assert(fs.statSync(file).size<1000);assert.equal(await cache.load(url),data);assert.equal(reads,1);assert.equal(fetches,1,'Repaired disk cover reused');
+ fs.unlinkSync(file);fs.mkdirSync(file);assert.equal(await cache.load(url),data);assert.equal(reads,1,'Directory is rejected without file read');assert.equal(fetches,2,'Disk write failure still returns downloaded cover');
+ console.log('PASS oversized cache skipped before allocation, repaired cover reused, non-file cache skipped, downloaded cover retained on disk error');
+ }finally{fs.readFileSync=read;fs.rmSync(root,{recursive:true,force:true});}})().catch(error=>{console.error(error);process.exitCode=1;});
