@@ -16,7 +16,7 @@ class Share115Provider{
    active();if(page){await this.wait(1000);active();}
    const query=new URLSearchParams({share_code:share.shareCode,receive_code:share.receiveCode,cid:String(cid),limit:'100',offset:String(offset)});
    const result=await this.request('https://webapi.115.com/share/snap?'+query,{},cookie);active();this.check(result);
-   const data=result.data,list=data?.list,count=Number(data?.count);
+   const data=result.data,list=data?.list,rawCount=data?.count,count=typeof rawCount==='number'||typeof rawCount==='string'&&rawCount.trim()!==''?Number(rawCount):NaN;
    if(!Array.isArray(list)||!Number.isSafeInteger(count)||count<0)throw Error('115分享分页格式异常，未执行转存');
    if(total!==null&&count!==total)throw Error('115分享内容在扫描期间变化，稍后重试');total=count;
    for(const row of list){const id=itemId(row);if(seen.has(id))throw Error('115分享重复分页，未执行转存');seen.add(id);rows.push({...row,id});}

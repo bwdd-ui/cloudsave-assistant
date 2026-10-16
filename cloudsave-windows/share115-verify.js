@@ -35,7 +35,7 @@ async function verifySavedShare({request,check,source,wait,share,rows,cid,cookie
    const body=response.data,path=response.path||body?.path,last=Array.isArray(path)?path.at(-1):null;
    const actual=String(last?.cid??last?.file_id??response.cid??body?.cid??'');
    if(actual!==String(folder))throw Error('115未确认核验目录，不能认定已保存');
-   const list=Array.isArray(body)?body:body?.list,count=Number(response.count??body?.count);
+   const list=Array.isArray(body)?body:body?.list,rawCount=response.count??body?.count,count=typeof rawCount==='number'||typeof rawCount==='string'&&rawCount.trim()!==''?Number(rawCount):NaN;
    if(!Array.isArray(list)||!Number.isSafeInteger(count)||count<0||total!==null&&count!==total)throw Error('目标目录分页不完整或内容变化，未确认保存');
    total=count;
    for(const row of list){const key=(file(row)?'f:':'d:')+id(row);if(!/^[fd]:[1-9]\d*$/.test(key)||seen.has(key))throw Error('目标目录分页重复或ID无效');seen.add(key);rows.push(row);}
