@@ -6,11 +6,14 @@ function syncPreferences(value={}) {
 class CloudSyncSchedule {
   constructor({state,sync,stopped=()=>false,now=Date.now,setTimer=setTimeout,clearTimer=clearTimeout}){Object.assign(this,{state,sync,stopped,now,setTimer,clearTimer});this.generation=0;}
   arm(){this.close();if(this.stopped())return;const state=this.state();if(!state.enabled||!state.uid)return;
-    const delay=Math.max(1000,(state.nextSyncAt||this.now())-this.now());
+    const remaining=(Number(state.nextSyncAt)||this.now())-this.now(),maxDelay=2147483647;
+    const delay=Number.isFinite(remaining)?Math.min(maxDelay,Math.max(1000,remaining)):1000;
     const generation=this.generation;
     this.timer=this.setTimer(()=>{
       if(generation!==this.generation)return;
       this.timer=null;if(this.stopped())return;
+      // Recalculate a distant deadline instead of letting Node overflow to 1 ms.
+      if(remaining>maxDelay&&Number.isFinite(remaining)){this.arm();return;}
       return Promise.resolve().then(()=>{if(generation===this.generation&&!this.stopped())return this.sync();}).finally(()=>{if(generation===this.generation)this.arm();}).catch(()=>{});
     },delay);
     this.timer?.unref?.();
