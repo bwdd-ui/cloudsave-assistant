@@ -9,13 +9,13 @@ function precision(value,now){
  const n=Number(value);if(Number.isFinite(n)&&n>0)return {start:n<1e10?n*1000:n,end:n<1e10?n*1000:n};
  const text=String(value||'').trim(),relative=text.match(/^(\d+)\s*(分钟|小时)前$/);
  if(relative){const start=now-Number(relative[1])*(relative[2]==='分钟'?60000:3600000);return {start,end:start};}
- const dateOnly=text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
- if(dateOnly){
-  const [,year,month,day]=dateOnly,iso=year+'-'+month.padStart(2,'0')+'-'+day.padStart(2,'0');
+ const calendarDate=text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?=$|[TZ\s])/i);
+ if(calendarDate){
+  const [,year,month,day]=calendarDate,iso=year+'-'+month.padStart(2,'0')+'-'+day.padStart(2,'0');
   const utc=Date.parse(iso+'T00:00:00Z');
   // ISO parsing needs padded fields and can silently normalize February 30.
   if(!Number.isFinite(utc)||new Date(utc).toISOString().slice(0,10)!==iso)return null;
-  const start=utc-8*3600000;return {start,end:start+86400000-1,coarse:true};
+  if(calendarDate[0]===text){const start=utc-8*3600000;return {start,end:start+86400000-1,coarse:true};}
  }
  const start=Date.parse(text);return Number.isFinite(start)?{start,end:start}:null;
 }
