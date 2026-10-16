@@ -2,13 +2,13 @@
 const name=row=>String(row.n??row.file_name??row.name??'');
 const file=row=>Boolean(row.fid&&String(row.fid)!=='0'||row.file_id);
 const id=row=>String(file(row)?row.fid||row.file_id:row.cid||'');
-const size=row=>Number(row.s??row.file_size??row.size);
+const size=row=>{const raw=row.s??row.file_size??row.size;return typeof raw==='number'||typeof raw==='string'&&raw.trim()!==''?Number(raw):NaN;};
 // Bucket by identity, then prefer matching checksums over checksum-less fallbacks.
 // Each candidate is consumed once; reversed large listings stay linear in size.
 function targetIndex(rows){
  const buckets=new Map();
  for(const row of rows){
-  const isFile=file(row),bytes=size(row);if(isFile&&(!Number.isFinite(bytes)||bytes<0))continue;
+  const isFile=file(row),bytes=size(row);if(isFile&&(!Number.isSafeInteger(bytes)||bytes<0))continue;
   const key=JSON.stringify([isFile,name(row),isFile?bytes:null]);
   let bucket=buckets.get(key);if(!bucket)buckets.set(key,bucket={all:[],hashes:new Map()});
   const entry={row,used:false},checksum=isFile?hash(row):'';
@@ -16,7 +16,7 @@ function targetIndex(rows){
  }
  const take=queue=>{while(queue?.length){const entry=queue.pop();if(!entry.used){entry.used=true;return entry.row;}}};
  return row=>{
-  const isFile=file(row),bytes=size(row);if(isFile&&(!Number.isFinite(bytes)||bytes<0))return;
+  const isFile=file(row),bytes=size(row);if(isFile&&(!Number.isSafeInteger(bytes)||bytes<0))return;
   const bucket=buckets.get(JSON.stringify([isFile,name(row),isFile?bytes:null]));if(!bucket)return;
   const checksum=isFile?hash(row):'';
   return checksum ? take(bucket.hashes.get(checksum))||take(bucket.hashes.get('')) : take(bucket.all);
