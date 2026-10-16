@@ -4,6 +4,7 @@ class FilteredLibraryPages {
  trim(keep){for(const [key,state] of this.scopes){if(this.scopes.size<=this.limit)break;if(key!==keep&&!state.running)this.scopes.delete(key);}}
  async get(key,page,read,match,stopped=()=>false){
   page=Number(page);if(!Number.isSafeInteger(page)||page<1)throw Error('资源页码请输入大于0的整数');
+  if(stopped())throw Error('资源读取已停止');
   let state=this.scopes.get(key);
   const time=this.now();
   if(!state||(!state.running&&(time<state.time||time-state.time>=this.ttl))){
@@ -15,6 +16,7 @@ class FilteredLibraryPages {
   this.scopes.delete(key);this.scopes.set(key,state);
   const previous=state.running||Promise.resolve();
   const work=previous.catch(()=>{}).then(async()=>{
+   if(stopped())throw Error('资源读取已停止');
    // One extra match determines whether a next display page actually exists.
    while(!state.complete&&(!state.limit||state.rows.length<page*state.limit+1)){
     if(stopped())throw Error('资源读取已停止');
