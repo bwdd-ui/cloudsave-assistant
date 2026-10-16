@@ -5,7 +5,8 @@ class FilteredLibraryPages {
  async get(key,page,read,match,stopped=()=>false){
   page=Number(page);if(!Number.isSafeInteger(page)||page<1)throw Error('资源页码请输入大于0的整数');
   let state=this.scopes.get(key);
-  if(!state||(!state.running&&this.now()-state.time>this.ttl)){
+  const time=this.now();
+  if(!state||(!state.running&&(time<state.time||time-state.time>=this.ttl))){
    state={time:this.now(),rows:[],seen:new Set(),signatures:new Set(),next:1,limit:0,complete:false,nativeItemCount:0};
    this.scopes.delete(key);this.scopes.set(key,state);
    this.trim(key);
