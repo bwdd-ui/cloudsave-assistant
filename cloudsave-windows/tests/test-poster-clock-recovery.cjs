@@ -1,0 +1,12 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto'),{PosterCache}=require('../poster-cache');
+(async()=>{const root=fs.mkdtempSync(path.join(os.tmpdir(),'cloudsave-poster-clock-')),url='https://images.invalid/clock.png',file=path.join(root,crypto.createHash('sha256').update(url).digest('hex')+'.json');const realNow=Date.now;let now=Date.now(),calls=0;Date.now=()=>now;const old='data:image/png;base64,b2xk',fresh='data:image/png;base64,bmV3',ttl=60000;
+ const seed=age=>{fs.writeFileSync(file,JSON.stringify({url,data:old}));const time=new Date(now-age);fs.utimesSync(file,time,time);};
+ const cache=new PosterCache({root,now:()=>now,ttl,fetcher:async()=>{calls++;return new Response(Buffer.from('new'),{headers:{'content-type':'image/png'}});}});
+ try{seed(-3600000);assert.equal(await cache.load(url),fresh,'Future cache must be refreshed after clock rollback');assert.equal(calls,1);
+ seed(ttl);assert.equal(await cache.load(url),fresh,'Exact TTL expires');assert.equal(calls,2);
+ seed(ttl-1000);assert.equal(await cache.load(url),old,'Unexpired cover reused');assert.equal(calls,2);
+ seed(0);assert.equal(await cache.load(url),old,'Current timestamp remains valid');assert.equal(calls,2);
+ now+=ttl;assert.equal(await cache.load(url),fresh);assert.equal(calls,3);
+ assert.equal(JSON.parse(fs.readFileSync(file)).data,fresh,'New cover replaces expired snapshot');
+ console.log('PASS future poster cache recovery, exact TTL expiry, normal disk reuse and repaired cache');
+ }finally{Date.now=realNow;fs.rmSync(root,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exitCode=1;});
