@@ -59,7 +59,7 @@ node tests/run-tests.cjs
 ## 开发资料
 
 - [架构与移交说明](docs/ARCHITECTURE.md)
-- [Windows 1.2.37 登录会话路径修复](docs/RELEASE-1.2.37.md)
+- [Windows 1.2.38 观影子路径会话保存](docs/RELEASE-1.2.38.md)
 - [Windows 1.2.26 网盘监控异常日期校验](docs/RELEASE-1.2.26.md)
 - [Windows 1.2.25 相对日期筛选边界修复](docs/RELEASE-1.2.25.md)
 - [Windows 1.2.24 读取超时清理异常保护](docs/RELEASE-1.2.24.md)
