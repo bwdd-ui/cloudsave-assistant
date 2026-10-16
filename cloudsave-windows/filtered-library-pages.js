@@ -19,12 +19,16 @@ class FilteredLibraryPages {
     const batch=await read(state.next);if(stopped())throw Error('资源读取已停止');
     const items=batch.items||[],signature=JSON.stringify(items.map(x=>x.id||x.title));
     if(items.length&&state.signatures.has(signature))throw Error('网站重复返回同一页，已停止补齐；请稍后刷新');
+    // Stage a complete source page before advancing its checkpoint or cache.
+    const limit=state.limit||Math.max(1,Number(batch.limit)||items.length||25),rows=[],ids=new Set();
+    for(const item of items){const id=String(item.id||JSON.stringify(item));if(match(item)&&!state.seen.has(id)&&!ids.has(id)){ids.add(id);rows.push(item);}}
+    const complete=!items.length||(typeof batch.hasNext==='boolean'?!batch.hasNext:state.next*(Number(batch.limit)||limit)>=Number(batch.total)),time=this.now();
+    if(stopped())throw Error('资源读取已停止');
     if(items.length)state.signatures.add(signature);
-    state.limit ||= Math.max(1,Number(batch.limit)||items.length||25);
-    state.nativeItemCount+=items.length;
-    for(const item of items){const id=String(item.id||JSON.stringify(item));if(match(item)&&!state.seen.has(id)){state.seen.add(id);state.rows.push(item);}}
-    state.complete=!items.length||(typeof batch.hasNext==='boolean'?!batch.hasNext:state.next*(Number(batch.limit)||state.limit)>=Number(batch.total));
-    state.next++;state.time=this.now();
+    state.limit=limit;state.nativeItemCount+=items.length;
+    for(const id of ids)state.seen.add(id);
+    state.rows.push(...rows);state.complete=complete;
+    state.next++;state.time=time;
    }
    const actual=state.complete?Math.min(page,Math.max(1,Math.ceil(state.rows.length/state.limit))):page;
    const start=(actual-1)*state.limit,end=actual*state.limit,hasNext=state.rows.length>end;
