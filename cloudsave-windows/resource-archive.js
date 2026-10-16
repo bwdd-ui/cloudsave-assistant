@@ -22,6 +22,8 @@ class ResourceArchive {
       database.archivedResourceIndex[key].status = resource.status; database.archivedResourceIndex[key].updatedAt = resource.updatedAt;
       database.archivedResourceIndex[key].associations = resource.associations;
       this.store.set(this.file(key), { identity: key, resource });
+      // A replacement snapshot must not leave the prior object in the read cache.
+      this.cache.delete(key);
     }
   }
   prune(database) {
