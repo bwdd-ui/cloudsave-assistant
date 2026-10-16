@@ -1,0 +1,7 @@
+const assert=require('node:assert/strict'),zlib=require('node:zlib'),{buildXlsx,buildTableXlsx}=require('../scan-export');
+function entries(buffer){const files=new Map();let p=0;while(buffer.readUInt32LE(p)===0x04034b50){const length=buffer.readUInt32LE(p+18),nameLength=buffer.readUInt16LE(p+26),extra=buffer.readUInt16LE(p+28),start=p+30+nameLength+extra;files.set(buffer.subarray(p+30,p+30+nameLength).toString(),zlib.inflateRawSync(buffer.subarray(start,start+length)).toString());p=start+length;}return files;}
+const invalid='\u0000\u0001\u000b\u001f\ufffe\uffff',valid='中文😀\t换行\n下一行',files=entries(buildXlsx([{movieTitle:'影片'+invalid+valid,title:'title'+invalid,url:'magnet:?xt=urn:btih:synthetic',media:{audio:'音频'+invalid}}]));
+for(const [name,xml]of files){assert(!/[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFE\uFFFF]/.test(xml),name+' contains illegal XML characters');}
+const sheet=files.get('xl/worksheets/sheet1.xml');assert(sheet.includes(valid));assert(sheet.includes('影片'));assert(sheet.includes('音频'));
+const custom=entries(buildTableXlsx(['列'+invalid],[['<tag> & "quoted"'+invalid]],[30],'名称'+invalid));assert(custom.get('xl/workbook.xml').includes('name="名称"'));assert(custom.get('xl/worksheets/sheet1.xml').includes('&lt;tag&gt; &amp; &quot;quoted&quot;'));assert(!custom.get('xl/worksheets/sheet1.xml').includes('\uffff'));
+console.log('PASS all XLSX XML parts strip forbidden characters, preserve Chinese/emoji/tabs/newlines and escape values in cells, headers and sheet names');

@@ -71,7 +71,7 @@ function rowValues(row) {
   const media = row.media || {};
   return [row.movieTitle||row.chineseTitle||'', row.size || (Number(row.sizeGB)>0 ? `${Number(row.sizeGB)} GB` : ''), row.releaseDate, row.url, row.title || media.filename, media.duration, media.resolution, media.frameRate, media.video, media.audio, row.genre, row.country].map(text);
 }
-function xml(value) { return String(value).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function xml(value) { return String(value).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\uFFFE\uFFFF]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 const CRC_TABLE = Array.from({ length: 256 }, (_, i) => { let c = i; for (let n = 0; n < 8; n++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
 function crc32(buffer) { let c = 0xffffffff; for (const byte of buffer) c = CRC_TABLE[(c ^ byte) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
 function zip(files) {
