@@ -6,6 +6,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('nod
  seed(ttl);assert.equal(await cache.load(url),fresh,'Exact TTL expires');assert.equal(calls,2);
  seed(ttl-1000);assert.equal(await cache.load(url),old,'Unexpired cover reused');assert.equal(calls,2);
  seed(0);assert.equal(await cache.load(url),old,'Current timestamp remains valid');assert.equal(calls,2);
+ const realStat=fs.statSync;fs.statSync=function(target,...args){const stat=realStat.call(this,target,...args);if(target===file)Object.defineProperty(stat,'mtimeMs',{value:now+0.75});return stat;};try{assert.equal(await cache.load(url),old,'Sub-millisecond filesystem precision must not invalidate a same-millisecond cache');assert.equal(calls,2);}finally{fs.statSync=realStat;}
  now+=ttl;assert.equal(await cache.load(url),fresh);assert.equal(calls,3);
  assert.equal(JSON.parse(fs.readFileSync(file)).data,fresh,'New cover replaces expired snapshot');
  console.log('PASS future poster cache recovery, exact TTL expiry, normal disk reuse and repaired cache');
