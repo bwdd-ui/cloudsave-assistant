@@ -1,0 +1,9 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{BufferedJson}=require('../buffered-json');
+(async()=>{const root=fs.mkdtempSync(path.join(os.tmpdir(),'cloudsave-close-drain-')),store=new BufferedJson(60000);try{
+ const file=path.join(root,'config.json'),history=path.join(root,'history.json');
+ store.set(file,{revision:1});const initial=store.flush();const closing=store.close();
+ const update=initial.then(()=>{store.set(file,{revision:2});store.set(history,{saved:1});return store.flush().then(()=>{store.set(file,{revision:3});store.set(history,null);});});
+ await Promise.all([update,closing]);assert.equal(JSON.parse(fs.readFileSync(file)).revision,3,'Close drains snapshots added by both rounds of flush callbacks');assert.equal(JSON.parse(fs.readFileSync(history)),null);assert.equal(store.pending.size,0);assert.equal(store.busy,null);assert.equal(store.timer,null);assert(store.closed);assert.throws(()=>store.set(file,{}),/关闭/);await store.close();
+ const retry=new BufferedJson(60000);try{const blocked=path.join(root,'blocked');fs.writeFileSync(blocked,'blocked');const target=path.join(blocked,'settings.json');retry.set(target,{retained:true});await assert.rejects(retry.close());assert(!retry.closed);assert(retry.dirty(target));fs.unlinkSync(blocked);fs.mkdirSync(blocked);await retry.close();assert.equal(JSON.parse(fs.readFileSync(target)).retained,true);}finally{if(!retry.closed){retry.closed=true;if(retry.timer)clearTimeout(retry.timer);await retry.worker?.terminate();}}
+ console.log('PASS close drains late settings and history snapshots, repeated close, failed close retains data for retry');
+}finally{if(!store.closed){store.closed=true;if(store.timer)clearTimeout(store.timer);await store.worker?.terminate();}fs.rmSync(root,{recursive:true,force:true});}})().catch(error=>{console.error(error);process.exitCode=1;});

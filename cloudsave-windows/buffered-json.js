@@ -68,6 +68,9 @@ class BufferedJson {
     if (!this.pending.size && !this.busy) return Promise.resolve();
     const promise = new Promise((resolve, reject) => this.waiters.push({ resolve, reject })); this.send(); return promise;
   }
-  async close() { await this.flush(); this.closed = true; if (this.timer) clearTimeout(this.timer); this.timer = null; if (this.worker) await this.worker.terminate(); }
+  async close() {
+    // Flush callbacks may enqueue a newer snapshot before this continuation runs.
+    do { await this.flush(); } while (this.pending.size || this.busy);
+    this.closed = true; if (this.timer) clearTimeout(this.timer); this.timer = null; if (this.worker) await this.worker.terminate(); }
 }
 module.exports = { BufferedJson };
