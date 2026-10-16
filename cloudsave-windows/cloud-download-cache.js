@@ -7,6 +7,8 @@ class CloudDownloadCache {
   report(value){this.progress={...this.progress,...value};try{this.onProgress({...this.progress});}catch(_){}}
   state(uid,url) { return this.data.accounts[String(uid)]?.tasks?.[this.key(url)]?.state || 'unknown'; }
   snapshot(uid){const value=this.data.accounts[String(uid)];if(!value)return [];return (value.currentKeys || Object.keys(value.tasks || {})).flatMap(key=>value.tasks[key]?[{key,...value.tasks[key]}]:[]);}
+  lastSyncAt(uid,now=this.now()) { return Math.max(0,...[this.data.accounts[String(uid)]?.syncedAt,this.attempts.get(String(uid))].map(value=>{const time=Number(value);return Number.isFinite(time)&&time>0&&time<=now?time:0;})); }
+  nextSyncAt(uid,interval=this.interval(),now=this.now()) { const last=this.lastSyncAt(uid,now);return last?last+interval:now; }
   retryable(uid,url) { return ['downloading','failed'].includes(this.state(uid,url)); }
   sync(force=false,{full=false,checkOldTasks=true}={}) {
     if(this.running){if(full&&this.progress.mode!=='full')return Promise.reject(new Error('当前增量同步尚未完成，请完成后再点击全部同步'));return this.running;}
@@ -15,8 +17,8 @@ class CloudDownloadCache {
   async refresh(force,full=false,checkOldTasks=true) {
     const uid=String(this.account() || '');if(!uid){if(force)throw new Error('请先登录115账号');return;}if(this.stopped()||!force&&!this.enabled())return;
     const previous=this.data.accounts[uid] || {tasks:{}};
-    if(!force && (Array.isArray(previous.currentKeys)||this.attempts.has(uid)) && this.now()-Math.max(Number(previous.syncedAt||0),this.attempts.get(uid)||0)<this.interval())return;
-    const startedAt=this.now();
+    const startedAt=this.now(),lastSyncAt=this.lastSyncAt(uid,startedAt);
+    if(!force && lastSyncAt && (Array.isArray(previous.currentKeys)||this.attempts.has(uid)) && startedAt-lastSyncAt<this.interval())return;
     this.attempts.set(uid,startedAt);this.report({uid,running:true,phase:'reading',mode:full?'full':'incremental',page:0,pages:0,readCount:0,fetchedCount:0,statusChecked:0,error:''});
     const tasks={...previous.tasks};let pages=1,count=0,added=0,changed=0;const fingerprints=new Set(),observed=new Map();
     const hours=Number(this.lookbackHours())||0,incremental=hours>0&&!full;
