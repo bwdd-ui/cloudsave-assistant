@@ -8,11 +8,20 @@ class GuanyingSession{
  async performRestore(){const stored=this.read()||{},p=this.partition;
   const ua=stored.userAgent||p.getUserAgent?.()?.replace(/\s(?:Electron|cloudsave-windows|CloudSave)\/\S+/gi,'');if(ua)p.setUserAgent?.(ua);
   let current=await this.liveCookies();
-  if(stored.cookies){try{const backup=JSON.parse(this.decrypt(stored.cookies));for(const cookie of backup){if(!this.allowed(cookie)||cookie.expirationDate&&cookie.expirationDate<Date.now()/1000)continue;
-   // Chromium's existing jar can contain a newer renewed session than our backup.
-   if(current.some(c=>c.name===cookie.name&&(c.path||'/')===(cookie.path||'/')&&String(c.domain).replace(/^\./,'')===String(cookie.domain).replace(/^\./,'')&&(!c.expirationDate||c.expirationDate>Date.now()/1000)))continue;
-   const {name,value,path,secure,httpOnly,expirationDate,sameSite}=cookie;await p.cookies.set({url:this.origin,name,value,path:path||'/',secure,httpOnly,...(!cookie.hostOnly&&cookie.domain?{domain:cookie.domain}:{}),...(expirationDate?{expirationDate}:{}),...(sameSite?{sameSite}:{})});
-  }}catch(e){this.log('观影会话备份恢复失败，仍保留当前浏览器会话','warning');}}
+  if(stored.cookies){
+   let failed=false;
+   try{const backup=JSON.parse(this.decrypt(stored.cookies));if(!Array.isArray(backup))throw Error('会话备份格式无效');
+    for(const cookie of backup){try{
+     if(!cookie||typeof cookie!=='object'||Array.isArray(cookie)||typeof cookie.name!=='string'||typeof cookie.value!=='string'){failed=true;continue;}
+     if(!this.allowed(cookie)||cookie.expirationDate&&cookie.expirationDate<Date.now()/1000)continue;
+     // Chromium may contain a renewed session newer than our backup.
+     if(current.some(c=>c.name===cookie.name&&(c.path||'/')===(cookie.path||'/')&&String(c.domain).replace(/^\./,'')===String(cookie.domain).replace(/^\./,'')&&(!c.expirationDate||c.expirationDate>Date.now()/1000)))continue;
+     const {name,value,path,secure,httpOnly,expirationDate,sameSite}=cookie;
+     await p.cookies.set({url:this.origin,name,value,path:path||'/',secure,httpOnly,...(!cookie.hostOnly&&cookie.domain?{domain:cookie.domain}:{}),...(expirationDate?{expirationDate}:{}),...(sameSite?{sameSite}:{})});
+    }catch(_){failed=true;}}
+   }catch(_){failed=true;}
+   if(failed){try{this.log('观影会话部分备份恢复失败，已继续恢复有效记录并保留当前浏览器会话','warning');}catch(_){}}
+  }
   if(!this.attached){this.attached=true;p.cookies.on?.('changed',(_event,cookie)=>{if(!this.allowed(cookie)||this.closed)return;clearTimeout(this.timer);this.timer=setTimeout(()=>this.capture().catch(()=>{}),400);this.timer.unref?.();});}
  }
  capture(win){const next=(this.pending||Promise.resolve()).catch(()=>{}).then(()=>this.performCapture(win));this.pending=next;return next;}
