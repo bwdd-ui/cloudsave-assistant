@@ -59,7 +59,7 @@ node tests/run-tests.cjs
 ## 开发资料
 
 - [架构与移交说明](docs/ARCHITECTURE.md)
-- [Windows 1.2.50 提交后同步日志保护](docs/RELEASE-1.2.50.md)
+- [Windows 1.2.51 资源浏览缓存容错](docs/RELEASE-1.2.51.md)
 - [Windows 1.2.26 网盘监控异常日期校验](docs/RELEASE-1.2.26.md)
 - [Windows 1.2.25 相对日期筛选边界修复](docs/RELEASE-1.2.25.md)
 - [Windows 1.2.24 读取超时清理异常保护](docs/RELEASE-1.2.24.md)
