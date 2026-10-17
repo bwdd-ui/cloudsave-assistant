@@ -2469,6 +2469,16 @@ ipcMain.handle('export-submit-history-excel', async (_event, options) => {
   return {path:target,count:rows.length,missing,reasons:[...reasons]};
 });
 ipcMain.handle('copy-submit-history', () => { const rows=submitHistory();if(!rows.length)throw new Error('暂无历史提交记录');const sources={auto:'自动监控不太灵',manual:'手动提交',batch:'批量离线'},statuses={success:'已成功提交离线',pending:'已成功提交离线',duplicate:'已提交自动跳过',failed:'失败',uncertain:'提交待确认',placement_failed:'保存目录异常'};clipboard.writeText(['时间\t来源\t状态\t资源标题\t保存目录\t磁力链接\t反馈',...rows.map(item=>[item.time,item.source==='auto' && (item.website==='qmp4' || String(item.movieId || '').startsWith('qm5:')) ? '自动监控七味' : item.source==='auto' && (item.website==='jying' || String(item.movieId || '').startsWith('jy4:')) ? '自动监控聚影' : item.source==='auto' && (item.website==='btbtla' || String(item.movieId || '').startsWith('bt3:')) ? '自动监控BT影视' : item.source==='auto' && (item.website==='guanying' || String(item.movieId || '').startsWith('gy:')) ? '自动监控观影' : sources[item.source] || '历史记录',statuses[item.status] || item.status,item.title || '',item.folderName || '',item.url,publicSubmissionFeedback(item.message)].map(value=>String(value || '').replace(/[\r\n\t]+/g,' ')).join('\t'))].join('\n'));return rows.length;});
+ipcMain.handle('save-filtered-history-links', async (_event, rawLinks) => {
+  const { prepareLinks, asText } = require('./filtered-link-export');
+  const links = prepareLinks(rawLinks);
+  const choice = await dialog.showSaveDialog(mainWindow, { title: '保存筛选链接为文本', defaultPath: `离线筛选链接-${exportFilenameStamp()}.txt`, filters: [{ name: '文本文件', extensions: ['txt'] }] });
+  if (choice.canceled || !choice.filePath) return { cancelled: true };
+  const target = /\.txt$/i.test(choice.filePath) ? choice.filePath : `${choice.filePath}.txt`;
+  fs.writeFileSync(target, asText(links), 'utf8');
+  try { appendMonitorLog(`已保存 ${links.length} 条筛选历史链接`, 'info', target); } catch {}
+  return { path: target, count: links.length };
+});
 let batchSubmitRunning = false;
 ipcMain.handle('batch-submit-magnets', async (_event, raw) => {
   if (batchSubmitRunning) throw new Error('批量离线正在执行，请等待当前批次完成');
