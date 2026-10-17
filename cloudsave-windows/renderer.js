@@ -227,7 +227,8 @@ async function refreshOfflineBatchFolder() {
 let cloudHistoryFilter='all',cloudSyncState={},cloudSyncSettingsLoaded=false;
 function renderSubmissionRows() {
   const source = $('submitHistorySource').value; const state = $('submitHistoryStatusFilter').value;
-  const signature = `${source}|${state}|${cloudHistoryFilter}`;
+  const query=$('submitHistorySearch').value.trim(),terms=window.cloudsaveHistorySearch.tokens(query);
+  const signature = JSON.stringify([source,state,cloudHistoryFilter,terms]);
   if (signature !== submissionFilterSignature) { submissionPage = 1; submissionFilterSignature = signature; }
   const count = statusName => submissionRows.filter(item => submissionMatchesState(item, statusName)).length;
   $('submitHistoryCounts').innerHTML = [['all', '总数', submissionRows.length], ['submitted', '已成功提交离线', count('submitted')], ['duplicate', '已提交自动跳过', count('duplicate')]].map(([key, label, total]) => `<button type="button" class="submission-count-filter${state === key && (key !== 'all' || source === 'all') ? ' active' : ''}" data-history-status="${key}" aria-pressed="${state === key && (key !== 'all' || source === 'all')}"><b>${total}</b>${label}</button>`).join('');
@@ -239,9 +240,12 @@ function renderSubmissionRows() {
     const local=new Map();for(const row of submissionRows)if(row.uid===cloudSyncState.uid&&!local.has(row.cloudKey || row.url))local.set(row.cloudKey || row.url,row);
     visible=cloudTasks.filter(task=>task.state===cloudHistoryFilter).map(task=>{const row=local.get(task.key);return row?{...row,cloudState:task.state}:{id:'115:'+task.key,uid:cloudSyncState.uid,cloudKey:task.key,url:task.url || (task.key.startsWith('magnet:')?'magnet:?xt=urn:btih:'+task.key.replace(/^magnet:/,''):''),title:task.title || '115云下载任务 '+task.key.replace(/^magnet:/,'').slice(0,12),size:task.size,source:'cloud',status:'remote',cloudState:task.state,time:task.createdAt?new Date(task.createdAt).toISOString():'',folderName:task.folderName,_cloudOnly:true,message:'此任务来自115云下载列表，未写入本地提交历史。'};});
   }
+  if(terms.length)visible=visible.filter(item=>window.cloudsaveHistorySearch.matches(item,terms));
   $('cloudDownloadCounts').innerHTML=[['downloading','正在下载'],['failed','下载失败'],['completed','已完成']].map(([value,label])=>`<button type="button" class="submission-count-filter ${cloudHistoryFilter===value?'active':''}" data-cloud-status="${value}"><b>${cloudCounts[value] || 0}</b>${label}</button>`).join('')+`<span class="sub">当前115账号全部云下载任务 · 上次同步缓存 · 再次点击取消筛选</span>`;
   $('cloudDownloadCounts').querySelectorAll('[data-cloud-status]').forEach(button=>button.onclick=()=>{cloudHistoryFilter=cloudHistoryFilter===button.dataset.cloudStatus?'all':button.dataset.cloudStatus;$('submitHistorySource').value='all';$('submitHistoryStatusFilter').value='all';renderSubmissionRows();});
   $('submitHistoryStatus').textContent=cloudHistoryFilter==='all'?`显示 ${visible.length} / ${submissionRows.length} 条本地提交记录 · 新记录在上方`:`显示 ${visible.length} 条115云下载任务 · 包括未在本软件提交的任务`;
+  if(terms.length)$('submitHistoryStatus').textContent+=' · 已应用本地关键词搜索';
+  $('clearSubmitHistorySearch').disabled=!query;
   const pages = Math.max(1, Math.ceil(visible.length / submissionPageSize));
   submissionPage = Math.min(pages, Math.max(1, submissionPage));
   $('historyPageInfo').textContent = `${submissionPage} / ${pages} 页 · 每页 ${submissionPageSize} 条`;
@@ -281,7 +285,11 @@ $('historyPrevPage').onclick = () => { submissionPage--; renderSubmissionRows();
 $('historyNextPage').onclick = () => { submissionPage++; renderSubmissionRows(); };
 $('submitHistorySource').onchange = renderSubmissionRows;
 $('submitHistoryStatusFilter').onchange = renderSubmissionRows;
-$('copySubmitHistory').onclick = async () => { try { const count = await window.cloudsave.copySubmitHistory(); const source = $('submitHistorySource').value; const state = $('submitHistoryStatusFilter').value; const visible = submissionRows.filter(item => (source === 'all' || submissionSource(item) === source) && submissionMatchesState(item, state)).length; $('submitHistoryStatus').textContent = `已提取全部 ${count} 条历史记录到剪贴板 · 当前筛选显示 ${visible} / ${submissionRows.length} 条`; status(`已提取 ${count} 条历史提交记录`); } catch (error) { $('submitHistoryStatus').textContent = error.message; } };
+let submissionSearchTimer;
+$('submitHistorySearch').oninput=()=>{clearTimeout(submissionSearchTimer);submissionSearchTimer=setTimeout(renderSubmissionRows,180);};
+$('clearSubmitHistorySearch').onclick=()=>{clearTimeout(submissionSearchTimer);$('submitHistorySearch').value='';renderSubmissionRows();$('submitHistorySearch').focus();};
+$('submitHistorySearch').onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();$('clearSubmitHistorySearch').onclick();}};
+$('copySubmitHistory').onclick = async () => { try { const count = await window.cloudsave.copySubmitHistory(); renderSubmissionRows();$('submitHistoryStatus').textContent = `已提取全部 ${count} 条历史记录到剪贴板 · `+$('submitHistoryStatus').textContent.replace(/^显示 /,'当前筛选显示 '); status(`已提取 ${count} 条历史提交记录`); } catch (error) { $('submitHistoryStatus').textContent = error.message; } };
  $('exportSubmitHistoryExcel').onclick = async () => {
   const button = $('exportSubmitHistoryExcel'); button.disabled = true;
   try { const result = await window.cloudsave.exportSubmitHistoryExcel(); $('submitHistoryStatus').textContent = result.cancelled ? '已取消导出' : `已导出全部 ${result.count} 条历史记录；${result.missing || 0} 条媒体信息不完整。${result.reasons?.length ? result.reasons.join("；") + "。" : ""}文件：${result.path}`; }

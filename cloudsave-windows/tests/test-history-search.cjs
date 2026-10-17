@@ -1,0 +1,6 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),{tokens,matches}=require('../history-search');
+const row={title:'征途 ABC 第12集',folderName:'电视剧归档',url:'magnet:?xt=urn:btih:123ABC',message:'目录核验通过',exportRecord:{movieTitle:'征途中文名',media:{filename:'Show.S01E12.ＭＫＶ'}}},before=JSON.stringify(row);
+assert.deepEqual(tokens(' ＡＢＣ abc  征途 '),['abc','征途']);for(const query of ['征途 归档','ABC 123abc','中文名 核验','s01e12 mkv',''])assert(matches(row,tokens(query)),query);for(const query of ['征途 不存在','<script>','another'])assert(!matches(row,tokens(query)),query);assert.equal(JSON.stringify(row),before);assert(matches({title:'电影'},tokens('电影')));assert(!matches({title:{text:'电影'}},tokens('电影')));
+const rows=Array.from({length:10000},(_,i)=>({title:'影片'+i,folderName:i===9999?'唯一目录':'普通目录'}));assert.deepEqual(rows.filter(row=>matches(row,tokens('影片9999 唯一目录'))).map(row=>row.title),['影片9999']);
+const context=vm.createContext({});vm.runInContext(fs.readFileSync(require.resolve('../history-search'),'utf8'),context);assert(context.cloudsaveHistorySearch.matches(row,context.cloudsaveHistorySearch.tokens('ＡＢＣ 归档')));
+console.log('PASS Chinese/case/fullwidth normalization, all-keyword cross-field match, literal text, no mutation, 10000-row scan and browser module');
