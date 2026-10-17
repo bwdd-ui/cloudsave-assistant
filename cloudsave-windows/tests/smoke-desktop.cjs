@@ -53,6 +53,20 @@ app.whenReady().then(async () => {
   win.setSize(1440,900);
   // Validate actual rendering/paging with an isolated, mixed-year catalogue.
   const {ipcMain}=require('electron'),{FilteredLibraryPages}=require('../filtered-library-pages'),filtered=new FilteredLibraryPages();
+  // Exercise manual-sync feedback through actual renderer/IPC with synthetic responses.
+  let rejectSync;let fixtureSyncState={enabled:true,running:false,syncedAt:Date.now()-1000,intervalMinutes:60};
+  ipcMain.removeHandler('cloud-download-state');ipcMain.handle('cloud-download-state',()=>fixtureSyncState);
+  ipcMain.removeHandler('sync-cloud-downloads');ipcMain.handle('sync-cloud-downloads',()=>new Promise((_resolve,reject)=>{rejectSync=reject;}));
+  await win.webContents.executeJavaScript("globalThis.syncFeedbackPromise=runCloudDownloadSync('full');renderCloudSyncStatus();void 0;");
+  for(let n=0;n<30&&!rejectSync;n++)await new Promise(r=>setTimeout(r,20));assert(rejectSync);
+  assert((await win.webContents.executeJavaScript("document.getElementById('cloudDownloadSyncStatus').textContent")).includes('正在全部同步'));
+  rejectSync(Error('合成同步失败，请稍后重试'));await win.webContents.executeJavaScript('syncFeedbackPromise');await new Promise(r=>setTimeout(r,1200));
+  assert((await win.webContents.executeJavaScript("document.getElementById('cloudDownloadSyncStatus').textContent")).includes('合成同步失败，请稍后重试'));
+  assert.equal(await win.webContents.executeJavaScript("document.getElementById('cloudSyncNow').disabled"),false);
+  fs.writeFileSync(path.join(output,'sync-feedback.png'),(await win.webContents.capturePage()).toPNG());
+  ipcMain.removeHandler('sync-cloud-downloads');ipcMain.handle('sync-cloud-downloads',()=>fixtureSyncState={...fixtureSyncState,syncedAt:Date.now(),progress:{phase:'complete'}});
+  await win.webContents.executeJavaScript("runCloudDownloadSync('incremental')");
+  assert(!(await win.webContents.executeJavaScript("document.getElementById('cloudDownloadSyncStatus').textContent")).includes('合成同步失败'));
   const films=Array.from({length:75},(_,i)=>({id:String(i),title:'筛选测试'+i,year:i<25?(i<11?'2026':'2025'):i<50?'2026':'2025'}));
   ipcMain.removeHandler('cloud-catalog');ipcMain.handle('cloud-catalog',(_e,mode,page)=>filtered.get('fixture',page,async n=>({items:films.slice((n-1)*25,n*25),limit:25,total:75}),x=>x.year==='2026'));
   await win.webContents.executeJavaScript("document.getElementById('showCloudHome').click();cloudFilterState={years:'2026'};cloudPage=1;loadCloudLibrary();void 0;");
@@ -80,7 +94,7 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript("document.getElementById('closeSettings').click();void 0;"); await new Promise(resolve => setTimeout(resolve, 80));
     assert.equal(await win.webContents.executeJavaScript("document.querySelector('.side-nav .nav-btn.active').id"), 'showMonitorFilter', 'Settings returns to the previous workspace');
   }
-  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800], filteredLibraryPages: true, legacyTransferUnverified: true }));
+  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800], filteredLibraryPages: true, legacyTransferUnverified: true, syncFeedback: true }));
   await win.webContents.executeJavaScript('window.cloudsave.backgroundSettings({closeToTray:false})');
   app.quit();
 }).catch(error => { console.error(error); fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: false, error: error.stack })); app.exit(1); });

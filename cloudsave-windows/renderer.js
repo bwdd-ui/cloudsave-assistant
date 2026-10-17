@@ -430,10 +430,11 @@ $('cloudSyncSave').onclick=async()=>{try{const input=$('cloudSyncInterval');if(!
 let manualCloudSyncBusy=false;
 async function runCloudDownloadSync(mode){
   if(manualCloudSyncBusy)return;manualCloudSyncBusy=true;
+  cloudSyncState={...cloudSyncState,running:true,progress:{phase:'reading',mode,page:0,pages:0,pageReads:0,fetchedCount:0,error:''}};
   $('cloudSyncNow').disabled=true;$('cloudSyncFull').disabled=true;
   $('cloudDownloadSyncStatus').textContent=mode==='full'?'正在全部同步115云下载；完整读取成功后建立本地缓存…':'正在从上次同步位置增量读取115云下载，保留历史缓存…';
   try{cloudSyncState=await window.cloudsave.syncCloudDownloads({mode});await renderSubmitHistory();status(mode==='full'?'115云下载全部同步完成；后续自动增量更新':'115云下载增量结果已保存至本地');}
-  catch(error){$('cloudDownloadSyncStatus').textContent='同步失败，保留原缓存：'+error.message;status(error.message,true);}
+  catch(error){cloudSyncState={...cloudSyncState,running:false,progress:{...cloudSyncState.progress,phase:'failed',error:error.message}};renderCloudSyncStatus();status(error.message,true);}
   finally{manualCloudSyncBusy=false;$('cloudSyncNow').disabled=Boolean(cloudSyncState.running);$('cloudSyncFull').disabled=Boolean(cloudSyncState.running);}
 }
 $('cloudSyncNow').onclick=()=>runCloudDownloadSync('incremental');
