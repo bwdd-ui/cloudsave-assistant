@@ -246,6 +246,9 @@ function renderSubmissionRows() {
   const copyableLinks=window.cloudsaveHistorySearch.uniqueLinks(visible);
   $('copyFilteredHistoryLinks').disabled=!copyableLinks.length;
   $('copyFilteredHistoryLinks').textContent=copyableLinks.length?'复制筛选链接（'+copyableLinks.length+'）':'复制筛选链接';
+  const copyFilteredRowsButton=$('copyFilteredSubmitHistory');
+  copyFilteredRowsButton.disabled=!visible.length;
+  copyFilteredRowsButton.textContent=visible.length?`复制筛选记录表格（${visible.length}）`:'复制筛选记录表格';
   const exportableRows=visible.filter(item=>!item._cloudOnly&&item.uid&&item.url);
   const exportFilteredButton=$('exportFilteredSubmitHistoryExcel');
   exportFilteredButton.disabled=!exportableRows.length;
@@ -299,6 +302,7 @@ $('submitHistorySearch').oninput=()=>{clearTimeout(submissionSearchTimer);submis
 $('clearSubmitHistorySearch').onclick=()=>{clearTimeout(submissionSearchTimer);$('submitHistorySearch').value='';renderSubmissionRows();$('submitHistorySearch').focus();};
 $('submitHistorySearch').onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();$('clearSubmitHistorySearch').onclick();}};
 $('copyFilteredHistoryLinks').onclick=async()=>{renderSubmissionRows();const links=window.cloudsaveHistorySearch.uniqueLinks(submissionFilteredRows);if(!links.length)return;try{await navigator.clipboard.writeText(links.join('\n'));$('submitHistoryStatus').textContent='已复制 '+links.length+' 条去重链接（全部匹配页面） · '+$('submitHistoryStatus').textContent;status('已复制 '+links.length+' 条筛选链接');}catch(error){$('submitHistoryStatus').textContent='筛选链接复制失败：'+error.message;status(error.message,true);}};
+$('copyFilteredSubmitHistory').onclick=async()=>{renderSubmissionRows();if(!submissionFilteredRows.length)return;try{await navigator.clipboard.writeText(window.cloudsaveHistoryCopy.rowsToTsv(submissionFilteredRows));$('submitHistoryStatus').textContent=`已复制当前筛选的 ${submissionFilteredRows.length} 条记录表格（全部匹配页面）`;status(`已复制 ${submissionFilteredRows.length} 条筛选记录`);}catch(error){$('submitHistoryStatus').textContent='筛选记录复制失败：'+error.message;status(error.message,true);}};
 $('copySubmitHistory').onclick = async () => { try { const count = await window.cloudsave.copySubmitHistory(); renderSubmissionRows();$('submitHistoryStatus').textContent = `已提取全部 ${count} 条历史记录到剪贴板 · `+$('submitHistoryStatus').textContent.replace(/^显示 /,'当前筛选显示 '); status(`已提取 ${count} 条历史提交记录`); } catch (error) { $('submitHistoryStatus').textContent = error.message; } };
 $('exportFilteredSubmitHistoryExcel').onclick = async () => {
   renderSubmissionRows();

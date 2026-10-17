@@ -76,6 +76,12 @@ app.whenReady().then(async () => {
   assert((await win.webContents.executeJavaScript("document.getElementById('submitHistoryList').textContent")).includes('第65集'));
   await win.webContents.executeJavaScript("document.getElementById('copyFilteredHistoryLinks').click();void 0;");await new Promise(r=>setTimeout(r,50));
   assert.equal(await win.webContents.executeJavaScript("syntheticCopiedLinks"),'magnet:?xt=urn:btih:'+String(65).padStart(40,'0'));
+  assert.equal(await win.webContents.executeJavaScript("document.getElementById('copyFilteredSubmitHistory').disabled"),false);
+  await win.webContents.executeJavaScript("document.getElementById('copyFilteredSubmitHistory').click();void 0;");await new Promise(r=>setTimeout(r,50));
+  const filteredTable=await win.webContents.executeJavaScript('syntheticCopiedLinks');
+  assert.match(filteredTable,/^时间\t来源\t状态\t资源标题\t保存目录\t磁力链接\t反馈\n/);
+  assert.equal(filteredTable.split('\n').length,2,'Table copy contains a header and every filtered matching record');
+  assert.match(filteredTable,/征途 ABC 第65集/);
   fs.writeFileSync(path.join(output,'history-search.png'),(await win.webContents.capturePage()).toPNG());
   await win.webContents.executeJavaScript("document.getElementById('submitHistorySource').value='auto';document.getElementById('submitHistorySource').dispatchEvent(new Event('change'));void 0;");
   assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#submitHistoryList .offline-history-row').length"),0);
@@ -133,7 +139,7 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript("document.getElementById('closeSettings').click();void 0;"); await new Promise(resolve => setTimeout(resolve, 80));
     assert.equal(await win.webContents.executeJavaScript("document.querySelector('.side-nav .nav-btn.active').id"), 'showMonitorFilter', 'Settings returns to the previous workspace');
   }
-  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800], filteredLibraryPages: true, legacyTransferUnverified: true, syncFeedback: true, historySearch: true, filteredLinksCopy: true, historyAttention: true, historyFilteredExport: true, systemClipboardChanged: false }));
+  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800], filteredLibraryPages: true, legacyTransferUnverified: true, syncFeedback: true, historySearch: true, filteredLinksCopy: true, historyAttention: true, historyFilteredExport: true, historyFilteredTableCopy: true, systemClipboardChanged: false }));
   await win.webContents.executeJavaScript('window.cloudsave.backgroundSettings({closeToTray:false})');
   app.quit();
 }).catch(error => { console.error(error); fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: false, error: error.stack })); app.exit(1); });

@@ -59,6 +59,7 @@ node tests/run-tests.cjs
 ## 开发资料
 
 - [架构与移交说明](docs/ARCHITECTURE.md)
+- [Windows 1.2.65 复制筛选提交记录表格](docs/RELEASE-1.2.65.md)
 - [Windows 1.2.64 按筛选结果导出提交记录](docs/RELEASE-1.2.64.md)
 - [Windows 1.2.63 待处理任务快速筛选](docs/RELEASE-1.2.63.md)
 - [Windows 1.2.26 网盘监控异常日期校验](docs/RELEASE-1.2.26.md)

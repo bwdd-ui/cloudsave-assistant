@@ -1,0 +1,5 @@
+CloudSave Windows x64 v1.2.65 validation
+
+Regression: 110/110 test files passed (npm test).
+Electron UI smoke: passed on Electron 44.5.1, x64; isolated temporary Data, no real websites/cloud accounts/transfers, system clipboard unchanged. Verified new filtered-history TSV copy in the actual renderer, including all filter matches irrespective of page, header/columns, and clipboard output.
+Packaging: portable Windows x64 EXE; ASAR includes new history-copy.js and matching updated UI/runtime files; package version 1.2.65; no Data packaged.
