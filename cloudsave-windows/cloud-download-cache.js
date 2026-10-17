@@ -28,7 +28,7 @@ class CloudDownloadCache {
     let lastCreated=Infinity,reachedBoundary=false,pageReads=0,fetchedCount=0,statusChecked=0,statusErrors=0;
     for(let page=1;page<=pages;page++) {
       if(this.stopped()||String(this.account())!==uid)throw new Error('115账户已更换或软件正在退出，未更新云下载缓存');
-      if(page>1)await this.wait(1000);
+      if(page>1){await this.wait(1000);if(this.stopped()||String(this.account())!==uid)throw new Error('115账户已更换或软件正在退出，未更新云下载缓存');}
       const result=await this.page(page),data=result.data;
       pageReads++;
       const list=result.tasks || data?.tasks || data?.list || (Array.isArray(data)?data:null);
@@ -65,7 +65,7 @@ class CloudDownloadCache {
         if(this.stopped()||String(this.account())!==uid)throw new Error('115账户已更换或软件正在退出，未更新云下载缓存');
         const [key,old]=pending[(start+n)%pending.length];
         this.report({uid,running:true,phase:'checking',statusChecked,statusTotal:budget});
-        if(n)await this.wait(300);
+        if(n){await this.wait(300);if(this.stopped()||String(this.account())!==uid)throw new Error('115账户已更换或软件正在退出，未更新云下载缓存');}
         statusChecked++;
         try{
           const value=await this.task(old),hash=String(old.infoHash||old.url.match(/btih:([a-f0-9]{40})(?:&|$)/i)?.[1]||'').toLowerCase();
