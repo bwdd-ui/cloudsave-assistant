@@ -60,7 +60,7 @@ class BufferedJson {
     const records = [...this.pending]; this.pending.clear(); this.busy = { id: ++this.revision, records };
     this.worker.ref();
     try { this.worker.postMessage(this.busy); }
-    catch (error) { for (const [target, value] of records) this.pending.set(target, value); this.busy = null; this.worker.unref(); for (const waiter of this.waiters.splice(0)) waiter.reject(error); this.lastError = error; }
+    catch (error) { for (const [target, value] of records) this.pending.set(target, value); this.busy = null; this.worker.unref(); for (const waiter of this.waiters.splice(0)) waiter.reject(error); this.lastError = error; this.arm(); }
   }
   flush() {
     if (this.timer) { clearTimeout(this.timer); this.timer = null; }

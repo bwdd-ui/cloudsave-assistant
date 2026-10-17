@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{BufferedJson}=require('../buffered-json');
+const wait=ms=>new Promise(r=>setTimeout(r,ms)),until=async test=>{const end=Date.now()+4000;while(!test()){if(Date.now()>end)throw Error('Timed out waiting for automatic writer recovery');await wait(20);}};
+(async()=>{const root=fs.mkdtempSync(path.join(os.tmpdir(),'cloudsave-dispatch-retry-'));try{for(const mode of ['flush','background']){const store=new BufferedJson(10),file=path.join(root,mode+'.json'),error=Error('synthetic worker dispatch failure');let calls=0;const post=store.worker.postMessage.bind(store.worker);store.worker.postMessage=message=>{calls++;if(calls===1)throw error;return post(message);};try{
+ store.set(file,{mode,retained:true});if(mode==='flush')await assert.rejects(store.flush(),e=>e===error);else await until(()=>store.lastError===error);
+ assert(store.dirty(file));assert.equal(store.busy,null);assert(store.timer,'Synchronous dispatch failure must schedule retry without another set or flush');assert.equal(calls,1);await wait(50);assert.equal(calls,1,'Retry respects one-second failure backoff');await until(()=>fs.existsSync(file)&&!store.dirty(file));assert.deepEqual(JSON.parse(fs.readFileSync(file)),{mode,retained:true});assert.equal(calls,2);assert.equal(store.lastError,null);assert.equal(store.waiters.length,0);
+ // A disposable export rejected by structured clone must still be removed.
+ await assert.rejects(store.xlsx(path.join(root,mode+'.xlsx'),[{invalid:()=>{}}]));assert.equal(store.pending.size,0);assert.equal(store.timer,null,'Failed disposable export must not leave retry timer');await store.close();
+ }finally{if(!store.closed){store.closed=true;if(store.timer)clearTimeout(store.timer);await store.worker?.terminate();}}}
+ console.log('PASS synchronous dispatch errors auto-retry with backoff, retain queued JSON, recover flush/background writes, and discard failed disposable exports');
+ }finally{fs.rmSync(root,{recursive:true,force:true});}})().catch(error=>{console.error(error);process.exitCode=1;});
