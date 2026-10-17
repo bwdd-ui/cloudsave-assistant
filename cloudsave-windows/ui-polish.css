@@ -113,3 +113,5 @@ body.sidebar-collapsed .nav-group-toggle span{display:none}body.sidebar-collapse
 @media(max-width:800px){.workspace-bar{padding:10px 14px;gap:9px}.workspace-context{flex-basis:100%}.workspace-actions{width:100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}.workspace-actions .btn{min-width:0;padding:8px 4px}.workspace-actions .workspace-related[hidden]+button{grid-column:span 2}.offline-overview>.card{padding:16px}.workspace-monitor-jumps span{flex-basis:100%;margin-left:0}}
 
 .offline-history-toolbar .offline-history-search{flex:1 1 240px;min-width:0}.offline-history-search .input{width:100%;min-width:0}.offline-history-search-note{flex-basis:100%}
+
+.offline-history-tools #submitHistoryCounts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}.offline-history-tools #submitHistoryCounts .submission-count-filter{min-width:0;white-space:normal}

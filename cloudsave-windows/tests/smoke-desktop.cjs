@@ -69,7 +69,7 @@ app.whenReady().then(async () => {
   assert(!(await win.webContents.executeJavaScript("document.getElementById('cloudDownloadSyncStatus').textContent")).includes('合成同步失败'));
   // Local history search filters all loaded records before UI pagination.
   await win.webContents.executeJavaScript("Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{globalThis.syntheticCopiedLinks=text;}}});void 0;");
-  await win.webContents.executeJavaScript(`submissionRows=Array.from({length:75},(_,i)=>({id:'search-'+i,title:i===65?'征途 ABC 第65集':'普通影片'+i,folderName:i===65?'电视剧归档':'普通目录',source:'manual',status:'success',url:'magnet:?xt=urn:btih:'+String(i===74?0:i).padStart(40,'0')}));cloudHistoryFilter='all';document.getElementById('submitHistorySource').value='all';document.getElementById('submitHistoryStatusFilter').value='all';renderSubmissionRows();document.getElementById('historyNextPage').click();document.getElementById('submitHistorySearch').value='征途 归档';document.getElementById('submitHistorySearch').dispatchEvent(new Event('input'));void 0;`);
+  await win.webContents.executeJavaScript(`submissionRows=Array.from({length:75},(_,i)=>({id:'search-'+i,title:i===65?'征途 ABC 第65集':'普通影片'+i,folderName:i===65?'电视剧归档':'普通目录',source:'manual',status:i===65?'uncertain':i===66?'placement_failed':i===67?'failed':'success',url:'magnet:?xt=urn:btih:'+String(i===74?0:i).padStart(40,'0')}));cloudHistoryFilter='all';document.getElementById('submitHistorySource').value='all';document.getElementById('submitHistoryStatusFilter').value='all';renderSubmissionRows();document.getElementById('historyNextPage').click();document.getElementById('submitHistorySearch').value='征途 归档';document.getElementById('submitHistorySearch').dispatchEvent(new Event('input'));void 0;`);
   await new Promise(r=>setTimeout(r,250));
   assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#submitHistoryList .offline-history-row').length"),1);
   assert((await win.webContents.executeJavaScript("document.getElementById('historyPageInfo').textContent")).startsWith('1 / 1'));
@@ -85,9 +85,24 @@ app.whenReady().then(async () => {
   assert.equal(await win.webContents.executeJavaScript("syntheticCopiedLinks.split('\\n').length"),74,'Copy includes all 75 matching records and deduplicates one repeated link');
   assert((await win.webContents.executeJavaScript("syntheticCopiedLinks")).includes(String(73).padStart(40,'0')));
   fs.writeFileSync(path.join(output,'history-filtered-copy.png'),(await win.webContents.capturePage()).toPNG());
+  await win.webContents.executeJavaScript("document.querySelector('#submitHistoryCounts [data-history-status=attention]').click();void 0;");
+  assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#submitHistoryList .offline-history-row').length"),3);
+  assert((await win.webContents.executeJavaScript("document.getElementById('submitHistoryList').textContent")).includes('提交待确认'));
+  await new Promise(r=>setTimeout(r,150));
+  fs.writeFileSync(path.join(output,'history-attention.png'),(await win.webContents.capturePage()).toPNG());
+  await win.webContents.executeJavaScript("document.getElementById('copyFilteredHistoryLinks').click();void 0;");await new Promise(r=>setTimeout(r,50));
+  assert.equal(await win.webContents.executeJavaScript("syntheticCopiedLinks.split('\\n').length"),3);
+  await win.webContents.executeJavaScript("document.getElementById('submitHistoryStatusFilter').value='placement_failed';document.getElementById('submitHistoryStatusFilter').dispatchEvent(new Event('change'));void 0;");
+  assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#submitHistoryList .offline-history-row').length"),1);
+  assert((await win.webContents.executeJavaScript("document.getElementById('submitHistoryList').textContent")).includes('普通影片66'));
+  await win.webContents.executeJavaScript("document.getElementById('submitHistoryStatusFilter').value='all';void 0;");
   await win.webContents.executeJavaScript(`cloudSyncState={...cloudSyncState,uid:'synthetic',tasks:[{key:'cloud:1',title:'云端特别片',folderName:'115目录',state:'completed',url:'magnet:synthetic'}],counts:{completed:1}};cloudHistoryFilter='completed';document.getElementById('submitHistorySearch').value='云端 115';renderSubmissionRows();void 0;`);
   assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#submitHistoryList .offline-history-row').length"),1);
   assert((await win.webContents.executeJavaScript("document.getElementById('submitHistoryList').textContent")).includes('云端特别片'));
+  await win.webContents.executeJavaScript("document.getElementById('submitHistorySearch').value='';document.querySelector('#submitHistoryCounts [data-history-status=attention]').click();void 0;");
+  assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#submitHistoryList .offline-history-row').length"),3,'Local attention shortcut leaves cloud-only view');
+  await win.webContents.executeJavaScript("cloudHistoryFilter='completed';renderSubmissionRows();document.getElementById('submitHistoryStatusFilter').value='placement_failed';document.getElementById('submitHistoryStatusFilter').dispatchEvent(new Event('change'));void 0;");
+  assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#submitHistoryList .offline-history-row').length"),1,'Local status dropdown leaves cloud-only view');
   await win.webContents.executeJavaScript("submissionRows=[];cloudHistoryFilter='all';document.getElementById('clearSubmitHistorySearch').click();void 0;");
   const films=Array.from({length:75},(_,i)=>({id:String(i),title:'筛选测试'+i,year:i<25?(i<11?'2026':'2025'):i<50?'2026':'2025'}));
   ipcMain.removeHandler('cloud-catalog');ipcMain.handle('cloud-catalog',(_e,mode,page)=>filtered.get('fixture',page,async n=>({items:films.slice((n-1)*25,n*25),limit:25,total:75}),x=>x.year==='2026'));
@@ -116,7 +131,7 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript("document.getElementById('closeSettings').click();void 0;"); await new Promise(resolve => setTimeout(resolve, 80));
     assert.equal(await win.webContents.executeJavaScript("document.querySelector('.side-nav .nav-btn.active').id"), 'showMonitorFilter', 'Settings returns to the previous workspace');
   }
-  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800], filteredLibraryPages: true, legacyTransferUnverified: true, syncFeedback: true, historySearch: true, filteredLinksCopy: true, systemClipboardChanged: false }));
+  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800], filteredLibraryPages: true, legacyTransferUnverified: true, syncFeedback: true, historySearch: true, filteredLinksCopy: true, historyAttention: true, systemClipboardChanged: false }));
   await win.webContents.executeJavaScript('window.cloudsave.backgroundSettings({closeToTray:false})');
   app.quit();
 }).catch(error => { console.error(error); fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: false, error: error.stack })); app.exit(1); });
