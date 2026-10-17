@@ -69,7 +69,7 @@ class CloudDownloadCache {
         statusChecked++;
         try{
           const value=await this.task(old),hash=String(old.infoHash||old.url.match(/btih:([a-f0-9]{40})(?:&|$)/i)?.[1]||'').toLowerCase();
-          if(value&&String(value.info_hash||value.hash||'').toLowerCase()===hash&&value.status!==undefined&&value.status!==null&&value.status!==''&&Number.isFinite(Number(value.status))){
+          if(value&&String(value.info_hash||value.hash||'').toLowerCase()===hash&&taskStatus(value).status!==null){
             // Single-task responses may omit list metadata; keep the cached title/date/size.
             const status=taskStatus(value);
             observed.set(key,{...old,...status,fileId:String(value.file_id||value.fid||value.data?.file_id||value.data?.fid||old.fileId||''),percent:value.percentDone??value.display_percent??old.percent});
@@ -92,6 +92,6 @@ class CloudDownloadCache {
   }
 }
 function taskCreatedAt(task){const raw=task.add_time||task.create_time||task.time||0,stamp=Number(raw);if(stamp>1e12)return stamp;if(stamp>1e9)return stamp*1000;return typeof raw==='string'?Date.parse(raw)||0:0;}
-function taskStatus(task){const status=task.status===null||task.status===''?NaN:Number(task.status);return {state:status===2?'completed':status===-1?'failed':[0,1].includes(status)?'downloading':'unknown',status:Number.isFinite(status)?status:null};}
+function taskStatus(task){const raw=task.status,number=typeof raw==='number'||typeof raw==='string'&&raw.trim()!==''?Number(raw):NaN,status=Number.isSafeInteger(number)?number:NaN;return {state:status===2?'completed':status===-1?'failed':[0,1].includes(status)?'downloading':'unknown',status:Number.isFinite(status)?status:null};}
 function taskValue(task,url,createdAt){return {...taskStatus(task),fileId:String(task.file_id||task.fid||task.data?.file_id||task.data?.fid||''),infoHash:String(task.info_hash||task.hash||url.match(/btih:([a-f0-9]{40})(?:&|$)/i)?.[1]||'').toLowerCase(),percent:task.percentDone??task.display_percent??null,url,title:String(task.name||task.file_name||task.title||'').slice(0,500),size:String(task.size||task.file_size||''),createdAt,folderName:String(task.savepath_name||task.path_name||'')};}
 module.exports={CloudDownloadCache,taskCreatedAt};
