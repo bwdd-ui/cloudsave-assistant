@@ -246,6 +246,10 @@ function renderSubmissionRows() {
   const copyableLinks=window.cloudsaveHistorySearch.uniqueLinks(visible);
   $('copyFilteredHistoryLinks').disabled=!copyableLinks.length;
   $('copyFilteredHistoryLinks').textContent=copyableLinks.length?'复制筛选链接（'+copyableLinks.length+'）':'复制筛选链接';
+  const exportableRows=visible.filter(item=>!item._cloudOnly&&item.uid&&item.url);
+  const exportFilteredButton=$('exportFilteredSubmitHistoryExcel');
+  exportFilteredButton.disabled=!exportableRows.length;
+  exportFilteredButton.textContent=exportableRows.length?`导出当前筛选为Excel（${exportableRows.length}）`:'导出当前筛选为Excel';
   $('cloudDownloadCounts').innerHTML=[['downloading','正在下载'],['failed','下载失败'],['completed','已完成']].map(([value,label])=>`<button type="button" class="submission-count-filter ${cloudHistoryFilter===value?'active':''}" data-cloud-status="${value}"><b>${cloudCounts[value] || 0}</b>${label}</button>`).join('')+`<span class="sub">当前115账号全部云下载任务 · 上次同步缓存 · 再次点击取消筛选</span>`;
   $('cloudDownloadCounts').querySelectorAll('[data-cloud-status]').forEach(button=>button.onclick=()=>{cloudHistoryFilter=cloudHistoryFilter===button.dataset.cloudStatus?'all':button.dataset.cloudStatus;$('submitHistorySource').value='all';$('submitHistoryStatusFilter').value='all';renderSubmissionRows();});
   $('submitHistoryStatus').textContent=cloudHistoryFilter==='all'?`显示 ${visible.length} / ${submissionRows.length} 条本地提交记录 · 新记录在上方`:`显示 ${visible.length} 条115云下载任务 · 包括未在本软件提交的任务`;
@@ -296,6 +300,15 @@ $('clearSubmitHistorySearch').onclick=()=>{clearTimeout(submissionSearchTimer);$
 $('submitHistorySearch').onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();$('clearSubmitHistorySearch').onclick();}};
 $('copyFilteredHistoryLinks').onclick=async()=>{renderSubmissionRows();const links=window.cloudsaveHistorySearch.uniqueLinks(submissionFilteredRows);if(!links.length)return;try{await navigator.clipboard.writeText(links.join('\n'));$('submitHistoryStatus').textContent='已复制 '+links.length+' 条去重链接（全部匹配页面） · '+$('submitHistoryStatus').textContent;status('已复制 '+links.length+' 条筛选链接');}catch(error){$('submitHistoryStatus').textContent='筛选链接复制失败：'+error.message;status(error.message,true);}};
 $('copySubmitHistory').onclick = async () => { try { const count = await window.cloudsave.copySubmitHistory(); renderSubmissionRows();$('submitHistoryStatus').textContent = `已提取全部 ${count} 条历史记录到剪贴板 · `+$('submitHistoryStatus').textContent.replace(/^显示 /,'当前筛选显示 '); status(`已提取 ${count} 条历史提交记录`); } catch (error) { $('submitHistoryStatus').textContent = error.message; } };
+$('exportFilteredSubmitHistoryExcel').onclick = async () => {
+  renderSubmissionRows();
+  const keys=[...new Set(submissionFilteredRows.filter(item=>!item._cloudOnly&&item.uid&&item.url).map(item=>`${item.uid}|${item.cloudKey||item.url}`))];
+  if(!keys.length)return;
+  const button=$('exportFilteredSubmitHistoryExcel');button.disabled=true;
+  try { const result=await window.cloudsave.exportSubmitHistoryExcel(keys);$('submitHistoryStatus').textContent=result.cancelled?'已取消筛选导出':`已导出当前筛选的 ${result.count} 条记录；${result.missing||0} 条媒体信息不完整。${result.reasons?.length?result.reasons.join('；')+'。':''}文件：${result.path}`; }
+  catch(error){$('submitHistoryStatus').textContent=`筛选导出失败：${error.message}`;}
+  finally{button.disabled=false;}
+};
  $('exportSubmitHistoryExcel').onclick = async () => {
   const button = $('exportSubmitHistoryExcel'); button.disabled = true;
   try { const result = await window.cloudsave.exportSubmitHistoryExcel(); $('submitHistoryStatus').textContent = result.cancelled ? '已取消导出' : `已导出全部 ${result.count} 条历史记录；${result.missing || 0} 条媒体信息不完整。${result.reasons?.length ? result.reasons.join("；") + "。" : ""}文件：${result.path}`; }

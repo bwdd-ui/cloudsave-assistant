@@ -9,6 +9,7 @@ const portableStorage = persistentRuntime
 const applicationVersion = require('./package.json').version;
 const ownsApplicationLock = require('./startup-instance').acquireInstance(app, dialog, applicationVersion);
 if (!ownsApplicationLock) app.exit(0);
+const { filterRows: filterHistoryExportRows } = require('./history-export');
 const jsonStore = persistentRuntime ? new (require('./buffered-json').BufferedJson)(1200) : null;
 let configCache;
 let configCheckedAt = 0;
@@ -2432,10 +2433,16 @@ ipcMain.handle('submit-history', () => submitHistory().slice().reverse().map(row
     exportRecord: { releaseDate: record.releaseDate, genre: record.genre, country: record.country, publishDate: record.publishDate,
       media: Object.fromEntries(['filename','duration','resolution','frameRate','video','audio'].map(key => [key, media[key]])) } };
 }));
-ipcMain.handle('export-submit-history-excel', async () => {
-  const rows = JSON.parse(JSON.stringify(submitHistory())).reverse();
+ipcMain.handle('export-submit-history-excel', async (_event, options) => {
+  const allRows = JSON.parse(JSON.stringify(submitHistory())).reverse();
+  const filtered = options !== undefined;
+  let rows = allRows;
+  if (filtered) {
+    if (!options || !Array.isArray(options.keys)) throw new Error('筛选导出参数无效，请刷新记录后重试');
+    rows = filterHistoryExportRows(allRows, options.keys, row => `${row.uid}|${magnetKey(row.url)}`);
+  }
   if (!rows.length) throw new Error('暂无历史提交记录');
-  const choice = await dialog.showSaveDialog(mainWindow, { title: '导出全部历史提交记录', defaultPath: `离线提交记录-${exportFilenameStamp()}.xlsx`, filters: [{ name: 'Excel 工作簿', extensions: ['xlsx'] }] });
+  const choice = await dialog.showSaveDialog(mainWindow, { title: filtered ? '导出筛选后的提交记录' : '导出全部历史提交记录', defaultPath: `${filtered ? '离线筛选记录' : '离线提交记录'}-${exportFilenameStamp()}.xlsx`, filters: [{ name: 'Excel 工作簿', extensions: ['xlsx'] }] });
   if (choice.canceled || !choice.filePath) return { cancelled: true };
   const sources = { auto: '自动监控不太灵', manual: '手动提交', batch: '批量离线' };
   const statuses = { success: '已成功提交离线', pending: '已成功提交离线', duplicate: '已提交自动跳过', failed: '失败', uncertain: '提交待确认', placement_failed: '保存目录异常' };
@@ -2456,8 +2463,9 @@ ipcMain.handle('export-submit-history-excel', async () => {
   const values=rows.map(item=>tools.rowValues(item.exportRecord));
   const widths=[30,18,42,48,70,18,28,18,36,55,24,28];
   const target=/\.xlsx$/i.test(choice.filePath)?choice.filePath:choice.filePath+'.xlsx';
-  if(jsonStore)await jsonStore.xlsx(target,values,{headers,widths,name:'全部提交记录'});else fs.writeFileSync(target,tools.buildTableXlsx(headers,values,widths,'全部提交记录'));
-  appendMonitorLog(`已导出全部 ${rows.length} 条历史提交记录`,'info',`${target} · ${missing} 条媒体信息不完整 · ${[...reasons].join('；')}`);
+  const sheetName=filtered?'筛选提交记录':'全部提交记录';
+  if(jsonStore)await jsonStore.xlsx(target,values,{headers,widths,name:sheetName});else fs.writeFileSync(target,tools.buildTableXlsx(headers,values,widths,sheetName));
+  appendMonitorLog(`已导出${filtered?'筛选':'全部'} ${rows.length} 条历史提交记录`,'info',`${target} · ${missing} 条媒体信息不完整 · ${[...reasons].join('；')}`);
   return {path:target,count:rows.length,missing,reasons:[...reasons]};
 });
 ipcMain.handle('copy-submit-history', () => { const rows=submitHistory();if(!rows.length)throw new Error('暂无历史提交记录');const sources={auto:'自动监控不太灵',manual:'手动提交',batch:'批量离线'},statuses={success:'已成功提交离线',pending:'已成功提交离线',duplicate:'已提交自动跳过',failed:'失败',uncertain:'提交待确认',placement_failed:'保存目录异常'};clipboard.writeText(['时间\t来源\t状态\t资源标题\t保存目录\t磁力链接\t反馈',...rows.map(item=>[item.time,item.source==='auto' && (item.website==='qmp4' || String(item.movieId || '').startsWith('qm5:')) ? '自动监控七味' : item.source==='auto' && (item.website==='jying' || String(item.movieId || '').startsWith('jy4:')) ? '自动监控聚影' : item.source==='auto' && (item.website==='btbtla' || String(item.movieId || '').startsWith('bt3:')) ? '自动监控BT影视' : item.source==='auto' && (item.website==='guanying' || String(item.movieId || '').startsWith('gy:')) ? '自动监控观影' : sources[item.source] || '历史记录',statuses[item.status] || item.status,item.title || '',item.folderName || '',item.url,publicSubmissionFeedback(item.message)].map(value=>String(value || '').replace(/[\r\n\t]+/g,' ')).join('\t'))].join('\n'));return rows.length;});

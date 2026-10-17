@@ -62,7 +62,7 @@ contextBridge.exposeInMainWorld('cloudsave', {
   submitHistory: () => ipcRenderer.invoke('submit-history'),
   onSubmitHistoryUpdated: callback => ipcRenderer.on('submit-history-updated', () => callback()),
   copySubmitHistory: () => ipcRenderer.invoke('copy-submit-history'),
-  exportSubmitHistoryExcel: () => ipcRenderer.invoke('export-submit-history-excel'),
+  exportSubmitHistoryExcel: keys => ipcRenderer.invoke('export-submit-history-excel', keys === undefined ? undefined : { keys }),
   batchSubmitMagnets: raw => ipcRenderer.invoke('batch-submit-magnets', raw),
   cloudCapabilities:()=>ipcRenderer.invoke('cloud-capabilities'),
   cloudLogin:cloud=>ipcRenderer.invoke('cloud-login',cloud),
