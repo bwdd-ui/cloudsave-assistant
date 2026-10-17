@@ -117,6 +117,12 @@ app.whenReady().then(async () => {
   assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#submitHistoryList .offline-history-row').length"),3,'Local attention shortcut leaves cloud-only view');
   await win.webContents.executeJavaScript("cloudHistoryFilter='completed';renderSubmissionRows();document.getElementById('submitHistoryStatusFilter').value='placement_failed';document.getElementById('submitHistoryStatusFilter').dispatchEvent(new Event('change'));void 0;");
   assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#submitHistoryList .offline-history-row').length"),1,'Local status dropdown leaves cloud-only view');
+  let retryPayload='';ipcMain.removeHandler('batch-submit-magnets');ipcMain.handle('batch-submit-magnets',(_e,raw)=>{retryPayload=raw;return [{url:raw,status:'pending',message:'合成提交成功'}];});
+  await win.webContents.executeJavaScript("window.confirm=()=>true;cloudHistoryFilter='all';document.getElementById('submitHistorySearch').value='';document.getElementById('submitHistoryStatusFilter').value='failed';document.getElementById('submitHistoryStatusFilter').dispatchEvent(new Event('change'));void 0;");
+  assert.equal(await win.webContents.executeJavaScript("document.getElementById('retryFilteredFailedMagnets').disabled"),false);
+  await win.webContents.executeJavaScript("document.getElementById('retryFilteredFailedMagnets').click();void 0;");
+  for(let n=0;n<30&&!((await win.webContents.executeJavaScript("document.getElementById('submitHistoryStatus').textContent")).includes('重试完成'));n++)await new Promise(r=>setTimeout(r,25));
+  assert.equal(retryPayload,'magnet:?xt=urn:btih:'+String(67).padStart(40,'0'),'Retry uses only the explicitly failed synthetic magnet; IPC is stubbed and no cloud request is made');
   await win.webContents.executeJavaScript("submissionRows=[];cloudHistoryFilter='all';document.getElementById('clearSubmitHistorySearch').click();void 0;");
   const films=Array.from({length:75},(_,i)=>({id:String(i),title:'筛选测试'+i,year:i<25?(i<11?'2026':'2025'):i<50?'2026':'2025'}));
   ipcMain.removeHandler('cloud-catalog');ipcMain.handle('cloud-catalog',(_e,mode,page)=>filtered.get('fixture',page,async n=>({items:films.slice((n-1)*25,n*25),limit:25,total:75}),x=>x.year==='2026'));
@@ -145,7 +151,7 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript("document.getElementById('closeSettings').click();void 0;"); await new Promise(resolve => setTimeout(resolve, 80));
     assert.equal(await win.webContents.executeJavaScript("document.querySelector('.side-nav .nav-btn.active').id"), 'showMonitorFilter', 'Settings returns to the previous workspace');
   }
-  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800], filteredLibraryPages: true, legacyTransferUnverified: true, syncFeedback: true, historySearch: true, historyDateFilter: true, filteredLinksCopy: true, historyAttention: true, historyFilteredExport: true, historyFilteredTableCopy: true, systemClipboardChanged: false }));
+  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800], filteredLibraryPages: true, legacyTransferUnverified: true, syncFeedback: true, historySearch: true, historyDateFilter: true, filteredLinksCopy: true, historyAttention: true, historyFilteredExport: true, historyFilteredTableCopy: true, retryOnlyFailedLinks: true, systemClipboardChanged: false }));
   await win.webContents.executeJavaScript('window.cloudsave.backgroundSettings({closeToTray:false})');
   app.quit();
 }).catch(error => { console.error(error); fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: false, error: error.stack })); app.exit(1); });
