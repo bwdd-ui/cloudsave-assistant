@@ -89,7 +89,7 @@ class CloudDownloadCache {
     const next={...this.data,accounts:{...this.data.accounts,[uid]:value}};
     await this.write(next);this.data=next;
     this.report({uid,running:false,phase:'complete',statusChecked,statusErrors,pageReads,fetchedCount,readCount:count});
-    this.log(`115云下载${full?'全部同步并缓存':incremental?'增量缓存同步':'核查'}：列表读取 ${pageReads} 页/${fetchedCount} 条，旧任务状态核对 ${statusChecked} 条${statusErrors?'（'+statusErrors+'条未确认，保留旧状态）':''}；累计缓存 ${currentKeys.length} 条，新增 ${added} 条、变化 ${changed} 条；下次约 ${Math.round(this.interval()/60000)} 分钟后`);return value;
+    try{this.log(`115云下载${full?'全部同步并缓存':incremental?'增量缓存同步':'核查'}：列表读取 ${pageReads} 页/${fetchedCount} 条，旧任务状态核对 ${statusChecked} 条${statusErrors?'（'+statusErrors+'条未确认，保留旧状态）':''}；累计缓存 ${currentKeys.length} 条，新增 ${added} 条、变化 ${changed} 条；下次约 ${Math.round(this.interval()/60000)} 分钟后`);}catch(_){/* Logging must not turn an already persisted sync into failure. */}return value;
   }
 }
 function taskCreatedAt(task){const raw=task.add_time||task.create_time||task.time||0,stamp=Number(raw);if(stamp>1e12)return stamp;if(stamp>1e9)return stamp*1000;return typeof raw==='string'?Date.parse(raw)||0:0;}
