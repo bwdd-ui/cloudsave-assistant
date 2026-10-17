@@ -200,6 +200,7 @@ async function handleLoginResult(result) { if (result?.error) return status(resu
 const submissionSourceLabels = { cloud:'115云下载', auto5:'自动监控七味',auto4:'自动监控聚影',auto3:'自动监控BT影视',auto2:'自动监控观影', auto: '自动监控不太灵磁力链接', manual: '手动提交', batch: '批量离线', legacy: '历史记录' };
 const submissionStatusLabels = { success: '已成功提交离线', pending: '已成功提交离线', duplicate: '已提交自动跳过', uncertain: '提交待确认', placement_failed: '保存目录异常', failed: '失败' };
 let submissionRows = [];
+let submissionFilteredRows = [];
 let submissionRefreshId = 0;
 let submissionPage = 1;
 const submissionPageSize = 50;
@@ -241,6 +242,10 @@ function renderSubmissionRows() {
     visible=cloudTasks.filter(task=>task.state===cloudHistoryFilter).map(task=>{const row=local.get(task.key);return row?{...row,cloudState:task.state}:{id:'115:'+task.key,uid:cloudSyncState.uid,cloudKey:task.key,url:task.url || (task.key.startsWith('magnet:')?'magnet:?xt=urn:btih:'+task.key.replace(/^magnet:/,''):''),title:task.title || '115云下载任务 '+task.key.replace(/^magnet:/,'').slice(0,12),size:task.size,source:'cloud',status:'remote',cloudState:task.state,time:task.createdAt?new Date(task.createdAt).toISOString():'',folderName:task.folderName,_cloudOnly:true,message:'此任务来自115云下载列表，未写入本地提交历史。'};});
   }
   if(terms.length)visible=visible.filter(item=>window.cloudsaveHistorySearch.matches(item,terms));
+  submissionFilteredRows=visible;
+  const copyableLinks=window.cloudsaveHistorySearch.uniqueLinks(visible);
+  $('copyFilteredHistoryLinks').disabled=!copyableLinks.length;
+  $('copyFilteredHistoryLinks').textContent=copyableLinks.length?'复制筛选链接（'+copyableLinks.length+'）':'复制筛选链接';
   $('cloudDownloadCounts').innerHTML=[['downloading','正在下载'],['failed','下载失败'],['completed','已完成']].map(([value,label])=>`<button type="button" class="submission-count-filter ${cloudHistoryFilter===value?'active':''}" data-cloud-status="${value}"><b>${cloudCounts[value] || 0}</b>${label}</button>`).join('')+`<span class="sub">当前115账号全部云下载任务 · 上次同步缓存 · 再次点击取消筛选</span>`;
   $('cloudDownloadCounts').querySelectorAll('[data-cloud-status]').forEach(button=>button.onclick=()=>{cloudHistoryFilter=cloudHistoryFilter===button.dataset.cloudStatus?'all':button.dataset.cloudStatus;$('submitHistorySource').value='all';$('submitHistoryStatusFilter').value='all';renderSubmissionRows();});
   $('submitHistoryStatus').textContent=cloudHistoryFilter==='all'?`显示 ${visible.length} / ${submissionRows.length} 条本地提交记录 · 新记录在上方`:`显示 ${visible.length} 条115云下载任务 · 包括未在本软件提交的任务`;
@@ -289,6 +294,7 @@ let submissionSearchTimer;
 $('submitHistorySearch').oninput=()=>{clearTimeout(submissionSearchTimer);submissionSearchTimer=setTimeout(renderSubmissionRows,180);};
 $('clearSubmitHistorySearch').onclick=()=>{clearTimeout(submissionSearchTimer);$('submitHistorySearch').value='';renderSubmissionRows();$('submitHistorySearch').focus();};
 $('submitHistorySearch').onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();$('clearSubmitHistorySearch').onclick();}};
+$('copyFilteredHistoryLinks').onclick=async()=>{renderSubmissionRows();const links=window.cloudsaveHistorySearch.uniqueLinks(submissionFilteredRows);if(!links.length)return;try{await navigator.clipboard.writeText(links.join('\n'));$('submitHistoryStatus').textContent='已复制 '+links.length+' 条去重链接（全部匹配页面） · '+$('submitHistoryStatus').textContent;status('已复制 '+links.length+' 条筛选链接');}catch(error){$('submitHistoryStatus').textContent='筛选链接复制失败：'+error.message;status(error.message,true);}};
 $('copySubmitHistory').onclick = async () => { try { const count = await window.cloudsave.copySubmitHistory(); renderSubmissionRows();$('submitHistoryStatus').textContent = `已提取全部 ${count} 条历史记录到剪贴板 · `+$('submitHistoryStatus').textContent.replace(/^显示 /,'当前筛选显示 '); status(`已提取 ${count} 条历史提交记录`); } catch (error) { $('submitHistoryStatus').textContent = error.message; } };
  $('exportSubmitHistoryExcel').onclick = async () => {
   const button = $('exportSubmitHistoryExcel'); button.disabled = true;

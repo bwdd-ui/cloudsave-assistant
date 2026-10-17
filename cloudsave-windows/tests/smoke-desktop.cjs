@@ -68,16 +68,23 @@ app.whenReady().then(async () => {
   await win.webContents.executeJavaScript("runCloudDownloadSync('incremental')");
   assert(!(await win.webContents.executeJavaScript("document.getElementById('cloudDownloadSyncStatus').textContent")).includes('合成同步失败'));
   // Local history search filters all loaded records before UI pagination.
-  await win.webContents.executeJavaScript(`submissionRows=Array.from({length:75},(_,i)=>({id:'search-'+i,title:i===65?'征途 ABC 第65集':'普通影片'+i,folderName:i===65?'电视剧归档':'普通目录',source:'manual',status:'success',url:'local:'+i}));cloudHistoryFilter='all';document.getElementById('submitHistorySource').value='all';document.getElementById('submitHistoryStatusFilter').value='all';renderSubmissionRows();document.getElementById('historyNextPage').click();document.getElementById('submitHistorySearch').value='征途 归档';document.getElementById('submitHistorySearch').dispatchEvent(new Event('input'));void 0;`);
+  await win.webContents.executeJavaScript("Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{globalThis.syntheticCopiedLinks=text;}}});void 0;");
+  await win.webContents.executeJavaScript(`submissionRows=Array.from({length:75},(_,i)=>({id:'search-'+i,title:i===65?'征途 ABC 第65集':'普通影片'+i,folderName:i===65?'电视剧归档':'普通目录',source:'manual',status:'success',url:'magnet:?xt=urn:btih:'+String(i===74?0:i).padStart(40,'0')}));cloudHistoryFilter='all';document.getElementById('submitHistorySource').value='all';document.getElementById('submitHistoryStatusFilter').value='all';renderSubmissionRows();document.getElementById('historyNextPage').click();document.getElementById('submitHistorySearch').value='征途 归档';document.getElementById('submitHistorySearch').dispatchEvent(new Event('input'));void 0;`);
   await new Promise(r=>setTimeout(r,250));
   assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#submitHistoryList .offline-history-row').length"),1);
   assert((await win.webContents.executeJavaScript("document.getElementById('historyPageInfo').textContent")).startsWith('1 / 1'));
   assert((await win.webContents.executeJavaScript("document.getElementById('submitHistoryList').textContent")).includes('第65集'));
+  await win.webContents.executeJavaScript("document.getElementById('copyFilteredHistoryLinks').click();void 0;");await new Promise(r=>setTimeout(r,50));
+  assert.equal(await win.webContents.executeJavaScript("syntheticCopiedLinks"),'magnet:?xt=urn:btih:'+String(65).padStart(40,'0'));
   fs.writeFileSync(path.join(output,'history-search.png'),(await win.webContents.capturePage()).toPNG());
   await win.webContents.executeJavaScript("document.getElementById('submitHistorySource').value='auto';document.getElementById('submitHistorySource').dispatchEvent(new Event('change'));void 0;");
   assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#submitHistoryList .offline-history-row').length"),0);
   await win.webContents.executeJavaScript("document.getElementById('submitHistorySource').value='all';document.getElementById('submitHistorySearch').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));void 0;");
   assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#submitHistoryList .offline-history-row').length"),50);
+  await win.webContents.executeJavaScript("document.getElementById('copyFilteredHistoryLinks').click();void 0;");await new Promise(r=>setTimeout(r,50));
+  assert.equal(await win.webContents.executeJavaScript("syntheticCopiedLinks.split('\\n').length"),74,'Copy includes all 75 matching records and deduplicates one repeated link');
+  assert((await win.webContents.executeJavaScript("syntheticCopiedLinks")).includes(String(73).padStart(40,'0')));
+  fs.writeFileSync(path.join(output,'history-filtered-copy.png'),(await win.webContents.capturePage()).toPNG());
   await win.webContents.executeJavaScript(`cloudSyncState={...cloudSyncState,uid:'synthetic',tasks:[{key:'cloud:1',title:'云端特别片',folderName:'115目录',state:'completed',url:'magnet:synthetic'}],counts:{completed:1}};cloudHistoryFilter='completed';document.getElementById('submitHistorySearch').value='云端 115';renderSubmissionRows();void 0;`);
   assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('#submitHistoryList .offline-history-row').length"),1);
   assert((await win.webContents.executeJavaScript("document.getElementById('submitHistoryList').textContent")).includes('云端特别片'));
@@ -109,7 +116,7 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript("document.getElementById('closeSettings').click();void 0;"); await new Promise(resolve => setTimeout(resolve, 80));
     assert.equal(await win.webContents.executeJavaScript("document.querySelector('.side-nav .nav-btn.active').id"), 'showMonitorFilter', 'Settings returns to the previous workspace');
   }
-  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800], filteredLibraryPages: true, legacyTransferUnverified: true, syncFeedback: true, historySearch: true }));
+  fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: true, applicationVersion: require('../package.json').version, electronVersion: process.versions.electron, arch: process.arch, isolatedData: true, realCloudTransfers: false, navigation: true, lazyCovers: true, keyboardCards: true, workspaceLayout: hasLayout, taskOverviewWidths: [1500,1040,800], filteredLibraryPages: true, legacyTransferUnverified: true, syncFeedback: true, historySearch: true, filteredLinksCopy: true, systemClipboardChanged: false }));
   await win.webContents.executeJavaScript('window.cloudsave.backgroundSettings({closeToTray:false})');
   app.quit();
 }).catch(error => { console.error(error); fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'desktop-smoke.json'), JSON.stringify({ ok: false, error: error.stack })); app.exit(1); });

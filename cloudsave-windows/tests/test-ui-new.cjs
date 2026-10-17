@@ -16,8 +16,8 @@ const $ = id => { if(!nodes.has(id)) nodes.set(id, {value:'',hidden:false,disabl
 $('submitHistorySource').value = 'all'; $('submitHistoryStatusFilter').value = 'all';
 let rows = Array.from({length:130},(_,index)=>({time:'2026-10-04T00:00:00Z',source:index%3===0?'auto':index%3===1?'manual':'batch',status:index%2?'pending':'success',url:`magnet:?xt=urn:btih:${index}&dn=<unsafe>`,message:'已接受 <任务>',cid:'123',folderName:'待归档'}));
 rows.push({time:'2026-10-04T00:00:00Z',status:'duplicate',url:'magnet:?xt=legacy',cid:'0'});
-let apiCalls=0, resolveBatch;
-const context = vm.createContext({$,document:{activeElement:null},window:{cloudsaveHistorySearch:require('../history-search'),cloudsave:{submitHistory:async()=>rows,state:async()=>({folder:{cid:'123',name:'待归档'}}),copySubmitHistory:async()=>rows.length,batchSubmitMagnets:async()=>{apiCalls++; return await new Promise(resolve=>resolveBatch=resolve);},onOfflineSyncProgress(){},syncOfflineStatus:async()=>({message:"已同步"}),onSubmitHistoryUpdated(callback){this.listener=callback;}}},navigator:{clipboard:{writeText:async()=>{}}},setTimeout,escapeHtml:value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])),formatLogTimestamp:value=>value,hideContentPages(){},setNavActive(){},status(){}});
+let apiCalls=0, resolveBatch,lastCopied;
+const context = vm.createContext({$,document:{activeElement:null},window:{cloudsaveHistorySearch:require('../history-search'),cloudsave:{submitHistory:async()=>rows,state:async()=>({folder:{cid:'123',name:'待归档'}}),copySubmitHistory:async()=>rows.length,batchSubmitMagnets:async()=>{apiCalls++; return await new Promise(resolve=>resolveBatch=resolve);},onOfflineSyncProgress(){},syncOfflineStatus:async()=>({message:"已同步"}),onSubmitHistoryUpdated(callback){this.listener=callback;}}},navigator:{clipboard:{writeText:async text=>{lastCopied=text;}}},setTimeout,escapeHtml:value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])),formatLogTimestamp:value=>value,hideContentPages(){},setNavActive(){},status(){}});
 const start = renderer.indexOf('const submissionSourceLabels'); const end = renderer.indexOf("$('login').onclick",start);
 vm.runInContext(renderer.slice(start,end),context);
 (async()=>{
@@ -31,6 +31,10 @@ vm.runInContext(renderer.slice(start,end),context);
   $('submitHistorySource').value='legacy'; $('submitHistorySource').onchange(); assert.match($('submitHistoryStatus').textContent,/显示 1 \/ 131/);
   $('submitHistorySource').value='auto'; $('submitHistoryStatusFilter').value='pending'; $('submitHistoryStatusFilter').onchange(); assert.match($('submitHistoryStatus').textContent,/显示 22 \/ 131/);
   await $('copySubmitHistory').onclick(); assert.match($('submitHistoryStatus').textContent,/全部 131 条/); assert.match($('submitHistoryStatus').textContent,/当前筛选显示 22 \/ 131/);
+  $('submitHistorySource').value='all';$('submitHistoryStatusFilter').value='all';$('submitHistorySearch').value='urn:btih:65';await $('copyFilteredHistoryLinks').onclick();assert.equal(lastCopied.split('\n').length,1);assert(lastCopied.includes('btih:65'));assert.match($('submitHistoryStatus').textContent,/已复制 1 条/);
+  $('submitHistorySearch').value='';await $('copyFilteredHistoryLinks').onclick();assert.equal(lastCopied.split('\n').length,131,'Filtered copy covers every loaded page');assert(lastCopied.includes('btih:129'));
+  const copied=lastCopied;$('submitHistorySearch').value='nothing-matches';await $('copyFilteredHistoryLinks').onclick();assert.equal(lastCopied,copied);assert($('copyFilteredHistoryLinks').disabled);
+  $('submitHistorySearch').value='';$('submitHistorySource').value='auto';$('submitHistoryStatusFilter').value='pending';vm.runInContext('renderSubmissionRows()',context);
   $('batchMagnets').value=''; await $('batchSubmit').onclick(); assert.equal(apiCalls,0); assert.match($('batchStatus').textContent,/有效/);
   $('batchMagnets').value='invalid'; await $('batchSubmit').onclick(); assert.equal(apiCalls,0);
   $('batchMagnets').value='magnet:?xt=urn:btih:abc'; const running=$('batchSubmit').onclick(); assert.equal(apiCalls,1); assert.equal($('batchSubmit').disabled,true); assert.equal($('batchMagnets').disabled,true);
