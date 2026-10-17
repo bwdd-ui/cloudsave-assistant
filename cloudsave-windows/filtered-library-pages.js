@@ -21,9 +21,10 @@ class FilteredLibraryPages {
    while(!state.complete&&(!state.limit||state.rows.length<page*state.limit+1)){
     if(stopped())throw Error('资源读取已停止');
     const batch=await read(state.next);if(stopped())throw Error('资源读取已停止');
+    if(!Array.isArray(batch?.items))throw Error('网站返回的资源列表格式异常，请重新加载');
     const sourceLimit=batch.limit==null||batch.limit===''?0:Number(batch.limit);
     if(!Number.isSafeInteger(sourceLimit)||sourceLimit<0)throw Error('网站返回的每页数量异常，请重新加载');
-    const items=batch.items||[],signature=JSON.stringify(items.map(x=>x.id||x.title));
+    const items=batch.items,signature=JSON.stringify(items.map(x=>x.id||x.title));
     if(items.length&&state.signatures.has(signature))throw Error('网站重复返回同一页，已停止补齐；请稍后刷新');
     // Stage a complete source page before advancing its checkpoint or cache.
     const limit=state.limit||Math.max(1,sourceLimit||items.length||25),rows=[],ids=new Set();
