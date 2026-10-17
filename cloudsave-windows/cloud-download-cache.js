@@ -35,8 +35,9 @@ class CloudDownloadCache {
       if(!Array.isArray(list))throw new Error('115云下载任务列表格式异常');
       const pageCount=result.page_count??data?.page_count;
       if(full&&pageCount===undefined)throw new Error('115全部同步缺少分页总数，未覆盖原缓存');
-      const total=Number(pageCount??1);
+      const rawCount=pageCount??1,total=typeof rawCount==='number'||typeof rawCount==='string'&&rawCount.trim()!==''?Number(rawCount):NaN;
       if(!Number.isInteger(total)||total<1||total>10000)throw new Error('115云下载分页异常');
+      if(full&&page>1&&total!==pages)throw new Error('115全部同步分页总数变化，未覆盖原缓存');
       pages=total;
       if(full&&page<pages&&!list.length)throw new Error('115全部同步提前返回空页，未覆盖原缓存');
       const fingerprint=JSON.stringify(list.map(t=>t.info_hash || t.hash || t.url || t.id || t.task_id));
