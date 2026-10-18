@@ -55,7 +55,10 @@ function showMonitor(state) {
   if (interval !== lastMonitorInterval && document.activeElement !== $('monitorInterval')) { $('monitorInterval').value = interval; lastMonitorInterval = interval; }
   const signature = JSON.stringify(state.filters || {});
   if (signature !== appliedMonitorFiltersSignature && !monitorFiltersDirty) { applyMonitorFilters(state.filters || {}); appliedMonitorFiltersSignature = signature; }
-  $('monitorStatus').textContent = (state.running ? state.lastMessage : `${enabled ? '监控已开启' : '监控未开启'}：${state.lastMessage || ''}${state.lastRun ? `\n上次检查：${new Date(state.lastRun).toLocaleString()}` : ''}`) + (Number(state.pendingPlacementCount) > 0 ? `\n等待115下载完成与目录核验：${Number(state.pendingPlacementCount)}条；请在“离线任务”页筛选“已提交/待核对”查看。` : '');
+  const pendingPlacementCount = Math.max(0, Math.floor(Number(state.pendingPlacementCount) || 0));
+  const pendingButton = $('openPendingPlacements');
+  if (pendingButton) { pendingButton.hidden = pendingPlacementCount === 0; pendingButton.textContent = `查看 ${pendingPlacementCount} 条待核验记录`; }
+  $('monitorStatus').textContent = (state.running ? state.lastMessage : `${enabled ? '监控已开启' : '监控未开启'}：${state.lastMessage || ''}${state.lastRun ? `\n上次检查：${new Date(state.lastRun).toLocaleString()}` : ''}`) + (pendingPlacementCount > 0 ? `\n等待115下载完成与目录核验：${pendingPlacementCount}条。` : '');
   if(!state.running && enabled)$('monitorStatus').textContent += state.filterBlockedSignature ? '\n资源扫描暂停，网站筛选恢复后自动继续。'+(state.nextFilterProbeAt?'下次轻量复查：'+new Date(state.nextFilterProbeAt).toLocaleString():'即将自动复查。')+(state.filterProbeLastAt?'\n上次筛选复查：'+new Date(state.filterProbeLastAt).toLocaleString():'') : state.nextRetryAt ? '\n网络退避至：'+new Date(state.nextRetryAt).toLocaleString() : state.nextCheckAt ? '\n下次定时检查：'+new Date(state.nextCheckAt).toLocaleString() : '';
   if (logAutoRefresh && $('logPage').style.display === 'flex') renderMonitorLogs(state.logs || []);
   if ($('filterPage').style.display === 'block') renderCoverageReview(state.coverageReview || []);
@@ -328,6 +331,16 @@ $('submitHistoryList').addEventListener('toggle', () => {
   if (submissionHistoryDirty && !historyHasOpenDetails() && $('offlineTasksPage').style.display === 'block' && !$('offlineHistoryPane').hidden) renderSubmitHistory();
 }, true);
 $('showOfflineTasks').onclick = showOfflineTasksPage;
+function openPendingPlacementHistory() {
+  $('submitHistorySource').value = 'all';
+  $('submitHistoryStatusFilter').value = 'pending';
+  $('submitHistorySearch').value = '';
+  $('submitHistoryDateFrom').value = '';
+  $('submitHistoryDateTo').value = '';
+  cloudHistoryFilter = 'all';
+  showOfflineTasksPage();
+}
+$('openPendingPlacements').onclick = openPendingPlacementHistory;
 $('offlineHistoryTab').onclick = () => { showOfflineTaskPane('history'); renderSubmitHistory(); };
 $('offlineBatchTab').onclick = () => showOfflineTaskPane('batch');
 $('refreshSubmitHistory').onclick = renderSubmitHistory;

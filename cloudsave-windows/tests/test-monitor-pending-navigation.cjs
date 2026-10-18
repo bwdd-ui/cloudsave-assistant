@@ -1,0 +1,40 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+
+const renderer = fs.readFileSync(require.resolve('../renderer.js'), 'utf8');
+const nodes = new Map();
+const $ = id => {
+  if (!nodes.has(id)) nodes.set(id, { hidden: true, value: '', textContent: '', disabled: false, checked: false, style: { display: 'none' }, classList: { toggle() {} }, setAttribute() {} });
+  return nodes.get(id);
+};
+let openedHistory = 0;
+const context = vm.createContext({ $, document: { activeElement: null, querySelectorAll: () => [] }, JSON, Boolean, Number, Date, lastMonitorEnabled: undefined, lastMonitorInterval: undefined, logAutoRefresh: false, monitorFiltersDirty: false, appliedMonitorFiltersSignature: '', applyMonitorFilters() {}, renderMonitorLogs() {}, renderCoverageReview() {}, showOfflineTasksPage() { openedHistory++; } });
+const monitorStart = renderer.indexOf('function showMonitor(state) {');
+const monitorEnd = renderer.indexOf('\nfunction renderCoverageReview', monitorStart);
+assert(monitorStart >= 0 && monitorEnd > monitorStart, 'monitor status renderer must exist');
+vm.runInContext(renderer.slice(monitorStart, monitorEnd), context);
+context.showMonitor({ enabled: true, running: false, lastMessage: '空闲', pendingPlacementCount: 4, filters: {} });
+assert.equal($('openPendingPlacements').hidden, false);
+assert.equal($('openPendingPlacements').textContent, '查看 4 条待核验记录');
+assert.match($('monitorStatus').textContent, /等待115下载完成与目录核验：4条/);
+context.showMonitor({ enabled: true, running: false, lastMessage: '空闲', pendingPlacementCount: 0, filters: {} });
+assert.equal($('openPendingPlacements').hidden, true, 'the action hides when there is no pending task');
+
+const navigationStart = renderer.indexOf('function openPendingPlacementHistory() {');
+const navigationEnd = renderer.indexOf('\n}', navigationStart) + 2;
+assert(navigationStart >= 0 && navigationEnd > navigationStart, 'pending-history navigation action must exist');
+vm.runInContext(renderer.slice(navigationStart, navigationEnd) + '\nglobalThis.openPending = openPendingPlacementHistory;', context);
+$('submitHistorySource').value = 'auto';
+$('submitHistorySearch').value = 'stale search';
+$('submitHistoryDateFrom').value = '2025-01-01';
+$('submitHistoryDateTo').value = '2025-01-02';
+context.openPending();
+assert.equal(openedHistory, 1);
+assert.equal($('submitHistorySource').value, 'all');
+assert.equal($('submitHistoryStatusFilter').value, 'pending');
+assert.equal($('submitHistorySearch').value, '');
+assert.equal($('submitHistoryDateFrom').value, '');
+assert.equal($('submitHistoryDateTo').value, '');
+assert.equal(vm.runInContext('cloudHistoryFilter', context), 'all');
+console.log('PASS pending count reveals a one-click action which resets stale filters and opens only queued-status history');
