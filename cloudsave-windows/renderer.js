@@ -79,7 +79,22 @@ function formatLogTimestamp(value) { const date = new Date(value); if (Number.is
 function sourceClass(source) { return `source-${String(source).replace(/[^a-z0-9_-]/gi, '').slice(0, 18) || 'default'}`; }
 let recentMonitorLogs = [];
 if ($('logWebsiteFilter')) $('logWebsiteFilter').onchange = () => renderMonitorLogs(recentMonitorLogs);
-function renderMonitorLogs(logs = []) { recentMonitorLogs = logs; const siteFilter = $('logWebsiteFilter')?.value || 'all'; logs = logs.filter(item => siteFilter === 'all' || (item.website || (item.source === 'guanying_monitor' ? 'guanying' : 'butailing')) === siteFilter); const list = $('monitorLogList'); if (!list) return; if (!logs.length) { list.innerHTML = '<div class="empty">暂无监控日志</div>'; return; } list.innerHTML = logs.slice().reverse().map(item => { const source = item.source || 'cloudsave_monitor'; const levelName = String(item.level || 'info').toLowerCase(); const level = levelName.toUpperCase(); const detail = item.details ? `\n${item.details}` : ''; return `<div class="log-row ${levelName}"><span class="log-time">${escapeHtml(formatLogTimestamp(item.time))}</span><span class="log-source ${sourceClass(source)}">${escapeHtml((item.website==="share115"?"115分享监控":item.website==="123"?"123云盘":item.website==="qmp4"?"七味":item.website==="jying"?"聚影":item.website==="btbtla"?"BT影视":item.website==="115"?"115云下载":item.website === "guanying" || source === "guanying_monitor" ? "观影" : "不太灵") + " · " + source)}</span><span class="log-level ${levelName}">${level}</span><span class="log-icon">▧</span><span class="log-message">${escapeHtml(`${item.message || ''}${detail}`)}</span></div>`; }).join(''); if (logAtBottom) list.scrollTop = 0; else $('newLog').style.display = 'block'; }
+if ($('logLevelFilter')) $('logLevelFilter').onchange = () => renderMonitorLogs(recentMonitorLogs);
+if ($('logSearch')) $('logSearch').oninput = () => { $('clearLogSearch').disabled=!$('logSearch').value; renderMonitorLogs(recentMonitorLogs); };
+if ($('clearLogSearch')) $('clearLogSearch').onclick=()=>{ $('logSearch').value=''; $('clearLogSearch').disabled=true; renderMonitorLogs(recentMonitorLogs); $('logSearch').focus(); };
+function renderMonitorLogs(logs = []) {
+  recentMonitorLogs = Array.isArray(logs)?logs:[];
+  const query=$('logSearch')?.value||'';
+  $('clearLogSearch').disabled=!query;
+  logs=window.cloudsaveMonitorLogSearch.filterLogs(recentMonitorLogs,{website:$('logWebsiteFilter')?.value||'all',level:$('logLevelFilter')?.value||'all',query});
+  const count=$('logFilterStatus');
+  if(count)count.textContent=query||$('logWebsiteFilter')?.value!=='all'||$('logLevelFilter')?.value!=='all'?`匹配 ${logs.length} / 最近 ${recentMonitorLogs.length} 条日志`:`实时显示最近${recentMonitorLogs.length}条；下载包含今天完整日志`;
+  const list = $('monitorLogList');
+  if (!list) return;
+  if (!logs.length) { list.innerHTML = recentMonitorLogs.length?'<div class="empty">没有匹配日志，请调整网站、级别或关键词</div>':'<div class="empty">暂无监控日志</div>'; return; }
+  list.innerHTML = logs.slice().reverse().map(item => { const source = item.source || 'cloudsave_monitor'; const levelName = String(item.level || 'info').toLowerCase(); const level = levelName.toUpperCase(); const detail = item.details ? `\n${item.details}` : ''; return `<div class="log-row ${levelName}"><span class="log-time">${escapeHtml(formatLogTimestamp(item.time))}</span><span class="log-source ${sourceClass(source)}">${escapeHtml((item.website==="share115"?"115分享监控":item.website==="123"?"123云盘":item.website==="qmp4"?"七味":item.website==="jying"?"聚影":item.website==="btbtla"?"BT影视":item.website==="115"?"115云下载":item.website === "guanying" || source === "guanying_monitor" ? "观影" : "不太灵") + " · " + source)}</span><span class="log-level ${levelName}">${level}</span><span class="log-icon">▧</span><span class="log-message">${escapeHtml(`${item.message || ''}${detail}`)}</span></div>`; }).join('');
+  if (logAtBottom) list.scrollTop = 0; else $('newLog').style.display = 'block';
+}
 function setNavActive(id) { document.querySelectorAll('.nav-btn').forEach(button => button.classList.toggle('active', button.id === id)); }
 function hideContentPages() { window.cloudsave.haisouView?.({visible:false}); for (const id of ['share115Page','pan123Page','guanyingLibraryPage','guanyingMonitorPage','btbtlaLibraryPage','btbtlaMonitorPage','jyingLibraryPage','jyingMonitorPage','qmp4LibraryPage','qmp4MonitorPage','haisouPage']) if ($(id)) $(id).style.display='none'; $('offlineTasksPage').style.display = 'none'; $('cloudHomePage').style.display = 'none'; $('settingsPage').style.display = 'none'; $('filterPage').style.display = 'none'; $('logPage').style.display = 'none'; }
 let cloudModuleReady = false;

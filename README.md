@@ -59,6 +59,8 @@ node tests/run-tests.cjs
 
 ## 开发资料
 
+- [Windows 1.2.74 运行日志筛选](cloudsave-windows/RELEASE-1.2.74.md)
+
 - [Windows 1.2.73 复制当前页提交记录表格](cloudsave-windows/RELEASE-1.2.73.md)
 
 - [Windows 1.2.68 筛选后重试失败磁力](docs/RELEASE-1.2.68.md)
