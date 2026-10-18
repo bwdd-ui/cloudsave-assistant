@@ -262,7 +262,7 @@ function renderSubmissionRows() {
   if(cloudHistoryFilter==='all')visible=submissionRows.filter(item=>(source==='all'||submissionSource(item)===source)&&submissionMatchesState(item,state));
   else{
     const local=new Map();for(const row of submissionRows)if(row.uid===cloudSyncState.uid&&!local.has(row.cloudKey || row.url))local.set(row.cloudKey || row.url,row);
-    visible=cloudTasks.filter(task=>task.state===cloudHistoryFilter).map(task=>{const row=local.get(task.key);return row?{...row,cloudState:task.state}:{id:'115:'+task.key,uid:cloudSyncState.uid,cloudKey:task.key,url:task.url || (task.key.startsWith('magnet:')?'magnet:?xt=urn:btih:'+task.key.replace(/^magnet:/,''):''),title:task.title || '115云下载任务 '+task.key.replace(/^magnet:/,'').slice(0,12),size:task.size,source:'cloud',status:'remote',cloudState:task.state,time:task.createdAt?new Date(task.createdAt).toISOString():'',folderName:task.folderName,_cloudOnly:true,message:task.state==='unknown'?'115返回了暂不支持的任务状态，无法确认是否已保存；请稍后重新同步或在115核对。':'此任务来自115云下载列表，未写入本地提交历史。'};});
+    visible=cloudTasks.filter(task=>task.state===cloudHistoryFilter).map(task=>{const row=local.get(task.key);return row?{...row,cloudState:task.state,_cloudStatusRow:true}:{id:'115:'+task.key,uid:cloudSyncState.uid,cloudKey:task.key,url:task.url || (task.key.startsWith('magnet:')?'magnet:?xt=urn:btih:'+task.key.replace(/^magnet:/,''):''),title:task.title || '115云下载任务 '+task.key.replace(/^magnet:/,'').slice(0,12),size:task.size,source:'cloud',status:'remote',cloudState:task.state,time:task.createdAt?new Date(task.createdAt).toISOString():'',folderName:task.folderName,_cloudOnly:true,message:task.state==='unknown'?'115返回了暂不支持的任务状态，无法确认是否已保存；请稍后重新同步或在115核对。':'此任务来自115云下载列表，未写入本地提交历史。'};});
   }
   if(terms.length)visible=visible.filter(item=>window.cloudsaveHistorySearch.matches(item,terms));
   if(dateFrom||dateTo)visible=visible.filter(item=>window.cloudsaveHistorySearch.matchesDateRange(item,dateFrom,dateTo));
@@ -298,7 +298,7 @@ function renderSubmissionRows() {
   const copyCurrentPageButton=$('copyCurrentSubmitHistoryPage');copyCurrentPageButton.disabled=!currentPageRows.length;copyCurrentPageButton.textContent=currentPageRows.length?`复制本页记录（${currentPageRows.length}）`:'复制本页记录';
   const opened = new Set([...$('submitHistoryList').querySelectorAll('details[open]')].map(node => node.closest('[data-submission-id]')?.dataset.submissionId));
   $('submitHistoryList').innerHTML = visible.length ? currentPageRows.map(item => {
-    const itemState = submissionStatus(item);const stateLabel=item._cloudOnly?({completed:'已完成',failed:'下载失败',downloading:'正在下载',unknown:'状态待确认'}[item.cloudState] || '状态未知'):submissionStatusLabels[itemState]; const itemSource = submissionSource(item);
+    const itemState = submissionStatus(item);const stateLabel=(item._cloudOnly||item._cloudStatusRow)?({completed:'下载成功',failed:'下载失败',downloading:'正在下载',unknown:'状态待确认'}[item.cloudState] || '状态未知'):submissionStatusLabels[itemState]; const itemSource = submissionSource(item);
     const folder = item.folderName || '未记录目录名';
     const record=item.exportRecord || {}, media=record.media || {};
     const metadata=[['文件名',media.filename || item.title],['逐集大小',Object.entries(item.episodeSizes || {}).map(([ep,size])=>ep+' '+Number(size).toFixed(3)+' GB').join('\n')],['时长',media.duration],['分辨率',media.resolution],['帧率',media.frameRate],['视频',media.video],['音频',media.audio],['资源上映日期',record.releaseDate],['类型',record.genre],['制片国家/地区',record.country],['磁力链接发布时间',record.publishDate]];
