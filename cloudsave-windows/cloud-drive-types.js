@@ -1,5 +1,5 @@
 'use strict';
-function cloudDriveType(link,fallback='其他网盘'){
+function cloudDriveType(link,fallback='其他网盘',hint=''){
  let url;try{url=new URL(String(link));}catch{return fallback;}if(!['http:','https:'].includes(url.protocol))return fallback;
  const host=url.hostname.toLowerCase(),within=domain=>host===domain||host.endsWith('.'+domain);
  for(const [domains,name] of [
@@ -15,6 +15,7 @@ function cloudDriveType(link,fallback='其他网盘'){
   [['yun.139.com','caiyun.139.com'],'移动云盘'],
   [['weiyun.com'],'腾讯微云']
  ])if(domains.some(within))return name;
+ if(/(?:光鸭|黄鸭)(?:云盘)?/i.test(String(hint||'')))return '光鸭云盘';
  if(/^(?:[a-z0-9-]+\.)*lanzou[a-z]?\.com$/.test(host))return '蓝奏云';return fallback;
 }
 module.exports={cloudDriveType};

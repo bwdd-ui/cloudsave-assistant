@@ -642,7 +642,7 @@ function normalizeCloudDetail(data = {}) {
   for (const [group, list] of Object.entries(cloudGroups)) for (const item of Array.isArray(list) ? list : []) {
     const url = String(item.link || item.url || '').trim();
     const qmpCloud=data.website==='qmp4'||group==='七味',rawTitle=String(item.seed_name || item.title || ''),description=qmpCloud?require('./cloud-update-description').cloudUpdateDescription(rawTitle):'';
-    if (/^https?:/i.test(url)) clouds.push({ title: qmpCloud?require('./cloud-update-description').withoutUpdateDescription(rawTitle,description):rawTitle, url, type: data.website==='qmp4'||group==='七味'?require('./cloud-drive-types').cloudDriveType(url):group, quality: String(item.quality || item.zqxd || item.definition || ''), size: String(item.size || item.zsize || item.file_size || ''), date: String(item.date || item.ezt || item.update_time || description || ''), code: String(item.code || item.extraction_code || item.receive_code || '') });
+    if (/^https?:/i.test(url)) clouds.push({ title: qmpCloud?require('./cloud-update-description').withoutUpdateDescription(rawTitle,description):rawTitle, url, type: data.website==='qmp4'||group==='七味'?require('./cloud-drive-types').cloudDriveType(url,group,rawTitle):group, quality: String(item.quality || item.zqxd || item.definition || ''), size: String(item.size || item.zsize || item.file_size || ''), date: String(item.date || item.ezt || item.update_time || description || ''), code: String(item.code || item.extraction_code || item.receive_code || '') });
   }
   return { movie, seeds, clouds, wp_num:data.wp_num };
 }
