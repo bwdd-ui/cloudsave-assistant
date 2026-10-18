@@ -1,0 +1,21 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+
+const renderer = fs.readFileSync(require.resolve('../renderer.js'), 'utf8');
+const start = renderer.indexOf('function pendingSubmissionAge(');
+const end = renderer.indexOf('\n}', start) + 2;
+assert(start >= 0 && end > start, 'pending age formatter must exist');
+const context = vm.createContext({ Date, Number, Math });
+vm.runInContext(renderer.slice(start, end) + '\nglobalThis.formatPendingAge = pendingSubmissionAge;', context);
+const format = value => context.formatPendingAge(value, Date.parse('2026-10-18T12:00:00Z'));
+assert.equal(format('2026-10-18T11:59:30Z'), '不足1分钟');
+assert.equal(format('2026-10-18T11:00:00Z'), '1小时');
+assert.equal(format('2026-10-18T09:35:00Z'), '2小时');
+assert.equal(format('2026-10-17T10:00:00Z'), '1天2小时');
+assert.equal(format('2026-10-16T12:00:00Z'), '2天');
+assert.equal(format('not-a-date'), '');
+assert.equal(format('2026-10-18T13:00:00Z'), '');
+assert.match(renderer, /itemState === 'pending' \? pendingSubmissionAge\(item\.time\)/, 'only unresolved pending records show elapsed time');
+assert.match(renderer, /按提交记录时间计算，不代表115实时下载进度/, 'age must be identified as local elapsed time, not remote download status');
+console.log('PASS pending elapsed time handles minute/hour/day ranges, malformed/future timestamps, and is limited to pending records with clear local-time context');
