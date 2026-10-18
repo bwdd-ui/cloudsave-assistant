@@ -228,6 +228,12 @@ let batchSubmitting = false;
 function submissionSource(item) {if(item.source==='auto'&&(item.website==='qmp4'||String(item.movieId || '').startsWith('qm5:')))return 'auto5';if(item.source==='auto'&&(item.website==='jying'||String(item.movieId || '').startsWith('jy4:')))return 'auto4';if(item.source==='auto'&&(item.website==='btbtla'||String(item.movieId || '').startsWith('bt3:')))return 'auto3'; if(item.source==='auto' && (item.website==='guanying' || String(item.movieId || '').startsWith('gy:')))return 'auto2'; return Object.hasOwn(submissionSourceLabels, item.source) ? item.source : 'legacy'; }
 function submissionStatus(item) { return Object.hasOwn(submissionStatusLabels, item.status) ? item.status : 'failed'; }
 function submissionMatchesState(item, state) { return state === 'all' || (state === 'submitted' ? ['success', 'pending', 'placement_failed', 'legacy_accepted', 'unverified'].includes(item.status) : state === 'attention' ? ['failed', 'placement_failed', 'uncertain', 'unverified'].includes(submissionStatus(item)) : submissionStatus(item) === state); }
+function submissionStatusCounts(rows) {
+  const counts={all:rows.length,submitted:0,duplicate:0,attention:0};
+  const submitted=new Set(['success','pending','placement_failed','legacy_accepted','unverified']),attention=new Set(['failed','placement_failed','uncertain','unverified']);
+  for(const item of rows){const state=submissionStatus(item);if(submitted.has(item.status))counts.submitted++;if(state==='duplicate')counts.duplicate++;if(attention.has(state))counts.attention++;}
+  return counts;
+}
 function showOfflineTaskPane(name) {
   if($('guangyaPane'))$('guangyaPane').hidden=true;if($('guangyaOfflineTab')){$('guangyaOfflineTab').classList.remove('active');$('guangyaOfflineTab').setAttribute('aria-selected','false');}
   const history = name === 'history';
@@ -248,8 +254,8 @@ function renderSubmissionRows() {
   const dateFrom=$('submitHistoryDateFrom').value,dateTo=$('submitHistoryDateTo').value,dateRangeValid=window.cloudsaveHistorySearch.validDateRange(dateFrom,dateTo);
   const signature = JSON.stringify([source,state,cloudHistoryFilter,terms,dateFrom,dateTo]);
   if (signature !== submissionFilterSignature) { submissionPage = 1; submissionFilterSignature = signature; }
-  const count = statusName => submissionRows.filter(item => submissionMatchesState(item, statusName)).length;
-  $('submitHistoryCounts').innerHTML = [['all', '总数', submissionRows.length], ['submitted', '已提交/待核对', count('submitted')], ['duplicate', '已提交自动跳过', count('duplicate')], ['attention','需要关注',count('attention')]].map(([key, label, total]) => `<button type="button" class="submission-count-filter${state === key && (key !== 'all' || source === 'all') ? ' active' : ''}" data-history-status="${key}" aria-pressed="${state === key && (key !== 'all' || source === 'all')}"><b>${total}</b>${label}</button>`).join('');
+  const counts=submissionStatusCounts(submissionRows);
+  $('submitHistoryCounts').innerHTML = [['all', '总数', counts.all], ['submitted', '已提交/待核对', counts.submitted], ['duplicate', '已提交自动跳过', counts.duplicate], ['attention','需要关注',counts.attention]].map(([key, label, total]) => `<button type="button" class="submission-count-filter${state === key && (key !== 'all' || source === 'all') ? ' active' : ''}" data-history-status="${key}" aria-pressed="${state === key && (key !== 'all' || source === 'all')}"><b>${total}</b>${label}</button>`).join('');
   $('submitHistoryCounts').querySelectorAll('[data-history-status]').forEach(button => button.onclick = () => { cloudHistoryFilter='all';$('submitHistoryStatusFilter').value = button.dataset.historyStatus; if (button.dataset.historyStatus === 'all') {$('submitHistorySource').value = 'all';} renderSubmissionRows(); });
   let visible;
   const cloudTasks=cloudSyncState.tasks || [],cloudCounts=cloudSyncState.counts || {downloading:0,failed:0,completed:0};
