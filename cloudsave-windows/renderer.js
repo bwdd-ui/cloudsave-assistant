@@ -203,7 +203,7 @@ let submissionRows = [];
 let submissionFilteredRows = [];
 let submissionRefreshId = 0;
 let submissionPage = 1;
-const submissionPageSize = 50;
+let submissionPageSize = 50;
 let submissionFilterSignature = "";
 let submissionUpdateTimer = null;
 let submissionHistoryDirty = false;
@@ -271,6 +271,7 @@ function renderSubmissionRows() {
   const pages = Math.max(1, Math.ceil(visible.length / submissionPageSize));
   submissionPage = Math.min(pages, Math.max(1, submissionPage));
   $('historyPageInfo').textContent = `${submissionPage} / ${pages} 页 · 每页 ${submissionPageSize} 条`;
+  $('submissionPageSize').value = String(submissionPageSize);
   $('historyPrevPage').disabled = submissionPage <= 1; $('historyNextPage').disabled = submissionPage >= pages;
   const opened = new Set([...$('submitHistoryList').querySelectorAll('details[open]')].map(node => node.closest('[data-submission-id]')?.dataset.submissionId));
   $('submitHistoryList').innerHTML = visible.length ? visible.slice((submissionPage - 1) * submissionPageSize, submissionPage * submissionPageSize).map(item => {
@@ -305,6 +306,7 @@ $('offlineBatchTab').onclick = () => showOfflineTaskPane('batch');
 $('refreshSubmitHistory').onclick = renderSubmitHistory;
 $('historyPrevPage').onclick = () => { submissionPage--; renderSubmissionRows(); };
 $('historyNextPage').onclick = () => { submissionPage++; renderSubmissionRows(); };
+$('submissionPageSize').onchange = () => { const value = Number($('submissionPageSize').value); submissionPageSize = [25, 50, 100].includes(value) ? value : 50; submissionPage = 1; renderSubmissionRows(); };
 $('submitHistorySource').onchange = ()=>{cloudHistoryFilter='all';renderSubmissionRows();};
 $('submitHistoryStatusFilter').onchange = ()=>{cloudHistoryFilter='all';renderSubmissionRows();};
 let submissionSearchTimer;
