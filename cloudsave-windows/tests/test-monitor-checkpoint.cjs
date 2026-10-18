@@ -21,6 +21,20 @@ const seed = (n, size = '2GB', title = 'Version' + n, date = '2026-10-04T10:00:0
 const detail = seeds => ({ title: 'Film', niandai: '2026', all_seeds: seeds });
 async function test(name, fn) { try { await fn(); console.log('PASS ' + name); } catch (e) { failures.push(name + ': ' + e.message); console.error('FAIL ' + name + ': ' + e.stack); } }
 (async () => {
+  await test('monitor status exposes current-account pending download and placement checks only', async () => {
+    const h = harness({ offlinePlacementPending: [
+      { id: 'a', uid: '123', url: magnet(1) },
+      { id: 'duplicate-a', uid: '123', url: magnet(1) },
+      { id: 'resolved', uid: '123', url: magnet(2) },
+      { id: 'other-account', uid: '456', url: magnet(3) }
+    ], offlinePlacementResolved: { ['123|magnet:' + '2'.padStart(40, '0')]: { resolution: 'confirmed' } } });
+    const current = await h.handlers['get-monitor-state']();
+    assert.equal(current.pendingPlacementCount, 1, 'duplicate and resolved entries are excluded and other accounts stay private');
+    h.run('pushMonitorStatus(monitorConfig())');
+    assert.equal(h.events.at(-1)[1].pendingPlacementCount, 1, 'live monitor updates carry the same count');
+    h.patch({ cookie: 'UID=456;CID=a;SEID=b' });
+    assert.equal((await h.handlers['get-monitor-state']()).pendingPlacementCount, 1, 'the count follows the active account');
+  });
   await test('fatal page detail failure preserves4/resumes currentmovie without redoing pages', async () => {
     const h = harness(); let fail = true; const lists = [], details = [];
     h.ctx.fetchCloudCatalog = async (mode, page) => { lists.push(mode + ':' + page); return mode === 'movie' ? { total: 6, limit: 2, items: [movie(page * 2 - 1), movie(page * 2)] } : { total: 0, limit: 2, items: [] }; };

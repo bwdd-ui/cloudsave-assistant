@@ -55,7 +55,7 @@ function showMonitor(state) {
   if (interval !== lastMonitorInterval && document.activeElement !== $('monitorInterval')) { $('monitorInterval').value = interval; lastMonitorInterval = interval; }
   const signature = JSON.stringify(state.filters || {});
   if (signature !== appliedMonitorFiltersSignature && !monitorFiltersDirty) { applyMonitorFilters(state.filters || {}); appliedMonitorFiltersSignature = signature; }
-  $('monitorStatus').textContent = state.running ? state.lastMessage : `${enabled ? '监控已开启' : '监控未开启'}：${state.lastMessage || ''}${state.lastRun ? `\n上次检查：${new Date(state.lastRun).toLocaleString()}` : ''}`;
+  $('monitorStatus').textContent = (state.running ? state.lastMessage : `${enabled ? '监控已开启' : '监控未开启'}：${state.lastMessage || ''}${state.lastRun ? `\n上次检查：${new Date(state.lastRun).toLocaleString()}` : ''}`) + (Number(state.pendingPlacementCount) > 0 ? `\n等待115下载完成与目录核验：${Number(state.pendingPlacementCount)}条；请在“离线任务”页筛选“已提交/待核对”查看。` : '');
   if(!state.running && enabled)$('monitorStatus').textContent += state.filterBlockedSignature ? '\n资源扫描暂停，网站筛选恢复后自动继续。'+(state.nextFilterProbeAt?'下次轻量复查：'+new Date(state.nextFilterProbeAt).toLocaleString():'即将自动复查。')+(state.filterProbeLastAt?'\n上次筛选复查：'+new Date(state.filterProbeLastAt).toLocaleString():'') : state.nextRetryAt ? '\n网络退避至：'+new Date(state.nextRetryAt).toLocaleString() : state.nextCheckAt ? '\n下次定时检查：'+new Date(state.nextCheckAt).toLocaleString() : '';
   if (logAutoRefresh && $('logPage').style.display === 'flex') renderMonitorLogs(state.logs || []);
   if ($('filterPage').style.display === 'block') renderCoverageReview(state.coverageReview || []);

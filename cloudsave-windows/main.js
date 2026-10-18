@@ -1918,11 +1918,23 @@ let monitorRunning = false, monitorStopRequested = false, monitorNextCheckAt=0;
 let monitorProgressMessage = '';
 let monitorPushTimer = null;
 let pendingMonitorStatus = null;
+function pendingOfflinePlacementCount(config = readConfig()) {
+  const uid = String((loadCookie().match(/(?:^|;\s*)UID=(\d+)/) || [])[1] || '');
+  if (!uid) return 0;
+  const resolved = config.offlinePlacementResolved || {};
+  const keys = new Set();
+  for (const entry of Array.isArray(config.offlinePlacementPending) ? config.offlinePlacementPending : []) {
+    if (String(entry?.uid || '') !== uid || !entry?.url) continue;
+    const key = magnetKey(entry.url);
+    if (key && !resolved[`${uid}|${key}`]) keys.add(key);
+  }
+  return keys.size;
+}
 function pushMonitorStatus(status) {
   if (status.running === true && status.lastMessage) monitorProgressMessage = status.lastMessage;
   const message = monitorRunning && status.running === undefined && monitorProgressMessage ? monitorProgressMessage : status.lastMessage;
   const { seen, ...display } = status;
-  const outgoing = { nextCheckAt:monitorNextCheckAt?new Date(monitorNextCheckAt).toISOString():'', running: monitorRunning, ...display, lastMessage: message };
+  const outgoing = { nextCheckAt:monitorNextCheckAt?new Date(monitorNextCheckAt).toISOString():'', running: monitorRunning, ...display, pendingPlacementCount: pendingOfflinePlacementCount(), lastMessage: message };
   if (!jsonStore) { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('monitor-status', outgoing); return; }
   pendingMonitorStatus = outgoing;
   if (!monitorPushTimer) monitorPushTimer = setTimeout(() => { monitorPushTimer = null; if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('monitor-status', pendingMonitorStatus); pendingMonitorStatus = null; }, 150);
@@ -2294,7 +2306,7 @@ ipcMain.handle('get-account', async () => { const cookie = loadCookie(); return 
 ipcMain.handle('get-credentials', (_event, provider) => loadCredentials(provider || '115'));
 ipcMain.handle('save-credentials', (_event, provider, account, password) => saveCredentials(provider || '115', account, password));
 ipcMain.handle('copy-cookie', () => { const cookie = loadCookie(); if (!cookie) throw new Error('本机还没有已保存的 Cookie'); clipboard.writeText(cookie); return true; });
-ipcMain.handle('get-monitor-state', () => ({ ...monitorConfig(), running: monitorRunning, nextCheckAt:monitorNextCheckAt?new Date(monitorNextCheckAt).toISOString():'', ...(monitorRunning && monitorProgressMessage ? { lastMessage: monitorProgressMessage } : {}) }));
+ipcMain.handle('get-monitor-state', () => ({ ...monitorConfig(), running: monitorRunning, nextCheckAt:monitorNextCheckAt?new Date(monitorNextCheckAt).toISOString():'', pendingPlacementCount: pendingOfflinePlacementCount(), ...(monitorRunning && monitorProgressMessage ? { lastMessage: monitorProgressMessage } : {}) }));
 ipcMain.handle('clear-monitor-logs', () => saveMonitor({ logs: [] }));
 ipcMain.handle('monitor-log-text', () => completeMonitorLogText());
 ipcMain.handle('retry-coverage-review', async (_event,url) => {
