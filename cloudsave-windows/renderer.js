@@ -273,8 +273,10 @@ function renderSubmissionRows() {
   $('historyPageInfo').textContent = `${submissionPage} / ${pages} 页 · 每页 ${submissionPageSize} 条`;
   $('submissionPageSize').value = String(submissionPageSize);
   $('historyPrevPage').disabled = submissionPage <= 1; $('historyNextPage').disabled = submissionPage >= pages;
+  const currentPageRows=visible.slice((submissionPage-1)*submissionPageSize,submissionPage*submissionPageSize);
+  const copyCurrentPageButton=$('copyCurrentSubmitHistoryPage');copyCurrentPageButton.disabled=!currentPageRows.length;copyCurrentPageButton.textContent=currentPageRows.length?`复制本页记录（${currentPageRows.length}）`:'复制本页记录';
   const opened = new Set([...$('submitHistoryList').querySelectorAll('details[open]')].map(node => node.closest('[data-submission-id]')?.dataset.submissionId));
-  $('submitHistoryList').innerHTML = visible.length ? visible.slice((submissionPage - 1) * submissionPageSize, submissionPage * submissionPageSize).map(item => {
+  $('submitHistoryList').innerHTML = visible.length ? currentPageRows.map(item => {
     const itemState = submissionStatus(item);const stateLabel=item._cloudOnly?({completed:'已完成',failed:'下载失败',downloading:'正在下载'}[item.cloudState] || '状态未知'):submissionStatusLabels[itemState]; const itemSource = submissionSource(item);
     const folder = item.folderName || '未记录目录名';
     const record=item.exportRecord || {}, media=record.media || {};
@@ -306,6 +308,7 @@ $('offlineBatchTab').onclick = () => showOfflineTaskPane('batch');
 $('refreshSubmitHistory').onclick = renderSubmitHistory;
 $('historyPrevPage').onclick = () => { submissionPage--; renderSubmissionRows(); };
 $('historyNextPage').onclick = () => { submissionPage++; renderSubmissionRows(); };
+$('copyCurrentSubmitHistoryPage').onclick=async()=>{renderSubmissionRows();const rows=submissionFilteredRows.slice((submissionPage-1)*submissionPageSize,submissionPage*submissionPageSize);if(!rows.length)return;try{await navigator.clipboard.writeText(window.cloudsaveHistoryCopy.rowsToTsv(rows));$('submitHistoryStatus').textContent=`已复制当前第 ${submissionPage} 页的 ${rows.length} 条记录表格`;status(`已复制本页 ${rows.length} 条记录`);}catch(error){$('submitHistoryStatus').textContent='本页记录复制失败：'+error.message;status(error.message,true);}};
 $('submissionPageSize').onchange = () => { const value = Number($('submissionPageSize').value); submissionPageSize = [25, 50, 100].includes(value) ? value : 50; try { localStorage.setItem('offlineHistoryPageSize', String(submissionPageSize)); } catch (_) {} submissionPage = 1; renderSubmissionRows(); };
 $('submitHistorySource').onchange = ()=>{cloudHistoryFilter='all';renderSubmissionRows();};
 $('submitHistoryStatusFilter').onchange = ()=>{cloudHistoryFilter='all';renderSubmissionRows();};
