@@ -213,7 +213,7 @@ function showFilterPage() { hideContentPages(); $('filterPage').style.display = 
 function showSettingsPage() { hideContentPages(); $('settingsPage').style.display = 'block'; setNavActive('showSettings'); }
 async function handleLoginResult(result) { if (result?.error) return status(result.error, true); if (result?.uid) { showAccount(result); status('115 登录成功'); log(`已登录：${result.nickname}`); } }
 const submissionSourceLabels = { cloud:'115云下载', auto5:'自动监控七味',auto4:'自动监控聚影',auto3:'自动监控BT影视',auto2:'自动监控观影', auto: '自动监控不太灵磁力链接', manual: '手动提交', batch: '批量离线', legacy: '历史记录' };
-const submissionStatusLabels = { success: '已成功提交离线', pending: '已成功提交离线', duplicate: '已提交自动跳过', uncertain: '提交待确认', placement_failed: '保存目录异常', legacy_accepted: '历史已接受', failed: '失败' };
+const submissionStatusLabels = { success: '已确认保存到目录', pending: '已加入离线任务，等待完成', duplicate: '已提交自动跳过', uncertain: '提交待确认', placement_failed: '保存目录异常', legacy_accepted: '历史已接受', unverified: '下载完成，位置未核实', failed: '失败' };
 let submissionRows = [];
 let submissionFilteredRows = [];
 let submissionRefreshId = 0;
@@ -227,7 +227,7 @@ function historyHasOpenDetails() { return Boolean($('submitHistoryList').querySe
 let batchSubmitting = false;
 function submissionSource(item) {if(item.source==='auto'&&(item.website==='qmp4'||String(item.movieId || '').startsWith('qm5:')))return 'auto5';if(item.source==='auto'&&(item.website==='jying'||String(item.movieId || '').startsWith('jy4:')))return 'auto4';if(item.source==='auto'&&(item.website==='btbtla'||String(item.movieId || '').startsWith('bt3:')))return 'auto3'; if(item.source==='auto' && (item.website==='guanying' || String(item.movieId || '').startsWith('gy:')))return 'auto2'; return Object.hasOwn(submissionSourceLabels, item.source) ? item.source : 'legacy'; }
 function submissionStatus(item) { return Object.hasOwn(submissionStatusLabels, item.status) ? item.status : 'failed'; }
-function submissionMatchesState(item, state) { return state === 'all' || (state === 'submitted' ? ['success', 'pending', 'placement_failed', 'legacy_accepted'].includes(item.status) : state === 'attention' ? ['failed', 'placement_failed', 'uncertain'].includes(submissionStatus(item)) : submissionStatus(item) === state); }
+function submissionMatchesState(item, state) { return state === 'all' || (state === 'submitted' ? ['success', 'pending', 'placement_failed', 'legacy_accepted', 'unverified'].includes(item.status) : state === 'attention' ? ['failed', 'placement_failed', 'uncertain', 'unverified'].includes(submissionStatus(item)) : submissionStatus(item) === state); }
 function showOfflineTaskPane(name) {
   if($('guangyaPane'))$('guangyaPane').hidden=true;if($('guangyaOfflineTab')){$('guangyaOfflineTab').classList.remove('active');$('guangyaOfflineTab').setAttribute('aria-selected','false');}
   const history = name === 'history';
@@ -249,7 +249,7 @@ function renderSubmissionRows() {
   const signature = JSON.stringify([source,state,cloudHistoryFilter,terms,dateFrom,dateTo]);
   if (signature !== submissionFilterSignature) { submissionPage = 1; submissionFilterSignature = signature; }
   const count = statusName => submissionRows.filter(item => submissionMatchesState(item, statusName)).length;
-  $('submitHistoryCounts').innerHTML = [['all', '总数', submissionRows.length], ['submitted', '已成功提交离线', count('submitted')], ['duplicate', '已提交自动跳过', count('duplicate')], ['attention','需要关注',count('attention')]].map(([key, label, total]) => `<button type="button" class="submission-count-filter${state === key && (key !== 'all' || source === 'all') ? ' active' : ''}" data-history-status="${key}" aria-pressed="${state === key && (key !== 'all' || source === 'all')}"><b>${total}</b>${label}</button>`).join('');
+  $('submitHistoryCounts').innerHTML = [['all', '总数', submissionRows.length], ['submitted', '已提交/待核对', count('submitted')], ['duplicate', '已提交自动跳过', count('duplicate')], ['attention','需要关注',count('attention')]].map(([key, label, total]) => `<button type="button" class="submission-count-filter${state === key && (key !== 'all' || source === 'all') ? ' active' : ''}" data-history-status="${key}" aria-pressed="${state === key && (key !== 'all' || source === 'all')}"><b>${total}</b>${label}</button>`).join('');
   $('submitHistoryCounts').querySelectorAll('[data-history-status]').forEach(button => button.onclick = () => { cloudHistoryFilter='all';$('submitHistoryStatusFilter').value = button.dataset.historyStatus; if (button.dataset.historyStatus === 'all') {$('submitHistorySource').value = 'all';} renderSubmissionRows(); });
   let visible;
   const cloudTasks=cloudSyncState.tasks || [],cloudCounts=cloudSyncState.counts || {downloading:0,failed:0,completed:0};
@@ -361,7 +361,7 @@ $('batchSubmit').onclick = async () => {
   batchSubmitting = true; updateBatchSubmitButton(); $('batchMagnets').disabled = true; $('batchSubmit').textContent = '正在提交…'; $('batchStatus').textContent = '正在逐条提交，请等待处理结果…'; $('batchResultList').innerHTML = '';
   try {
     const results = await window.cloudsave.batchSubmitMagnets($('batchResourceMode')?{raw,mode:$('batchResourceMode').value}:raw); const count = state => results.filter(item => submissionMatchesState(item, state)).length;
-    $('batchStatus').textContent = `处理 ${results.length} 条：已成功提交离线 ${count('submitted')}，已提交自动跳过 ${count('duplicate')}，提交待确认 ${count('uncertain')}，失败或需检查 ${count('failed') + count('placement_failed')}`;
+    $('batchStatus').textContent = `处理 ${results.length} 条：已提交/待核对 ${count('submitted')}，已提交自动跳过 ${count('duplicate')}，提交待确认 ${count('uncertain')}，失败或需检查 ${count('failed') + count('placement_failed')}`;
     $('batchResultList').innerHTML = results.map(item => `<div class="offline-batch-result"><span class="submission-status ${submissionStatus(item)}">${submissionStatusLabels[submissionStatus(item)]}</span><p>${escapeHtml(item.message || '')}</p><code>${escapeHtml(item.url || '')}</code></div>`).join('');
     await renderSubmitHistory();
   } catch (error) { $('batchStatus').textContent = `批量提交未完成：${error.message}。已处理条目可在提交记录查看。`; await renderSubmitHistory(); }

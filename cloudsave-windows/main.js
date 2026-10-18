@@ -22,7 +22,7 @@ const SITE = 'https://www.0bt0.com';
 const SITE_PARAMS = { app_id: '83768d9ad4', identity: '23734adac0301bccdcb107c4aa21f96c' };
 const CONFIG_FILE = () => path.join(app.getPath('userData'), 'config.json');
 const RESOURCE_DATABASE_FILE = () => path.join(app.getPath('userData'), 'offline-resources.json');
-const ACCEPTED_RESOURCE_STATES = new Set(['success', 'pending', 'duplicate', 'placement_failed', 'legacy_accepted']);
+const ACCEPTED_RESOURCE_STATES = new Set(['success', 'pending', 'duplicate', 'placement_failed', 'legacy_accepted', 'unverified']);
 const resourceArchive = jsonStore ? new (require('./resource-archive').ResourceArchive)(path.join(app.getPath('userData'), 'resource-archive'), jsonStore) : null;
 function getDatabaseResource(database, key) { return resourceArchive ? resourceArchive.get(database, key) : database.resources[key]; }
 function databaseResourceEntries(database) { return resourceArchive ? resourceArchive.entries(database) : Object.entries(database.resources); }
@@ -419,7 +419,12 @@ function completeMonitorLogText() {
   if(fs.existsSync(monitorLogFile()))entries=String(fs.readFileSync(monitorLogFile(),'utf8')).split(/\r?\n/).filter(Boolean).flatMap(line=>{try{return [JSON.parse(line)];}catch(_){return [];}});
   return entries.map(entry=>`${new Date(entry.time).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})} - ${({guanying:'观影',btbtla:'BT影视',jying:'聚影',qmp4:'七味','115':'115云下载','share115':'115分享监控','123':'123云盘'}[entry.website]||'不太灵') + ' / ' + (entry.source || 'cloudsave_monitor')} - ${String(entry.level || 'info').toUpperCase()} - ${publicSubmissionFeedback(entry.message)}${entry.details?'\n'+publicSubmissionFeedback(entry.details):''}`).join('\n');
 }
-function submitHistory() { return resourceDatabase().history; }
+function submitHistory() {
+  const database=resourceDatabase(),config=readConfig(),resolved=config.offlinePlacementResolved||{},legacy=Array.isArray(config.submitHistory)?config.submitHistory:[];let changed=false;
+  for(const row of database.history){if(row.status!=='success'||resolved[`${row.uid}|${magnetKey(row.url)}`]?.resolution!=='unavailable')continue;row.status='unverified';row.message='115已完成下载；原输出已被整理、移动或删除，结束目录核对（未核实当前位置）';const old=legacy.find(item=>row.id?item.id===row.id:item.uid===row.uid&&magnetKey(item.url)===magnetKey(row.url));if(old){old.status='unverified';old.message=row.message;}changed=true;}
+  if(changed){writeResourceDatabase(database);config.submitHistory=legacy;writeConfig(config);}
+  return database.history;
+}
 function notifySubmitHistoryUpdated() {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('submit-history-updated');
 }
@@ -1621,7 +1626,7 @@ function finishOfflinePlacement(entry,status,message,resolution){
 }
 function unavailableOfflineOutput(entry){
   const message='115已完成下载；原输出已被整理、移动或删除，结束目录核对（未核实当前位置）';
-  finishOfflinePlacement(entry,'success',message,'unavailable');appendMonitorLog(message,'info','','115');return true;
+  finishOfflinePlacement(entry,'unverified',message,'unavailable');appendMonitorLog(message,'warning','','115');return true;
 }
 let offlineOperationQueue = Promise.resolve();
 let pendingStatusUpdates = null;
@@ -2445,7 +2450,7 @@ ipcMain.handle('export-submit-history-excel', async (_event, options) => {
   const choice = await dialog.showSaveDialog(mainWindow, { title: filtered ? '导出筛选后的提交记录' : '导出全部历史提交记录', defaultPath: `${filtered ? '离线筛选记录' : '离线提交记录'}-${exportFilenameStamp()}.xlsx`, filters: [{ name: 'Excel 工作簿', extensions: ['xlsx'] }] });
   if (choice.canceled || !choice.filePath) return { cancelled: true };
   const sources = { auto: '自动监控不太灵', manual: '手动提交', batch: '批量离线' };
-  const statuses = { success: '已成功提交离线', pending: '已成功提交离线', duplicate: '已提交自动跳过', failed: '失败', uncertain: '提交待确认', placement_failed: '保存目录异常' };
+  const statuses = { success: '已确认保存到目录', pending: '已加入离线任务，等待完成', duplicate: '已提交自动跳过', failed: '失败', uncertain: '提交待确认', placement_failed: '保存目录异常', unverified: '下载完成，位置未核实' };
   const tools=scanExportTools(), cache=new Map(), movies=new Map(), reasons=new Set(); let firstMissing=true, missing=0;
   for(const row of rows){
     const identity=`${row.uid}|${magnetKey(row.url)}`;let resource=getDatabaseResource(resourceDatabase(), identity);
@@ -2468,7 +2473,7 @@ ipcMain.handle('export-submit-history-excel', async (_event, options) => {
   appendMonitorLog(`已导出${filtered?'筛选':'全部'} ${rows.length} 条历史提交记录`,'info',`${target} · ${missing} 条媒体信息不完整 · ${[...reasons].join('；')}`);
   return {path:target,count:rows.length,missing,reasons:[...reasons]};
 });
-ipcMain.handle('copy-submit-history', () => { const rows=submitHistory();if(!rows.length)throw new Error('暂无历史提交记录');const sources={auto:'自动监控不太灵',manual:'手动提交',batch:'批量离线'},statuses={success:'已成功提交离线',pending:'已成功提交离线',duplicate:'已提交自动跳过',failed:'失败',uncertain:'提交待确认',placement_failed:'保存目录异常'};clipboard.writeText(['时间\t来源\t状态\t资源标题\t保存目录\t磁力链接\t反馈',...rows.map(item=>[item.time,item.source==='auto' && (item.website==='qmp4' || String(item.movieId || '').startsWith('qm5:')) ? '自动监控七味' : item.source==='auto' && (item.website==='jying' || String(item.movieId || '').startsWith('jy4:')) ? '自动监控聚影' : item.source==='auto' && (item.website==='btbtla' || String(item.movieId || '').startsWith('bt3:')) ? '自动监控BT影视' : item.source==='auto' && (item.website==='guanying' || String(item.movieId || '').startsWith('gy:')) ? '自动监控观影' : sources[item.source] || '历史记录',statuses[item.status] || item.status,item.title || '',item.folderName || '',item.url,publicSubmissionFeedback(item.message)].map(value=>String(value || '').replace(/[\r\n\t]+/g,' ')).join('\t'))].join('\n'));return rows.length;});
+ipcMain.handle('copy-submit-history', () => { const rows=submitHistory();if(!rows.length)throw new Error('暂无历史提交记录');const sources={auto:'自动监控不太灵',manual:'手动提交',batch:'批量离线'},statuses={success:'已确认保存到目录',pending:'已加入离线任务，等待完成',duplicate:'已提交自动跳过',failed:'失败',uncertain:'提交待确认',placement_failed:'保存目录异常',unverified:'下载完成，位置未核实'};clipboard.writeText(['时间\t来源\t状态\t资源标题\t保存目录\t磁力链接\t反馈',...rows.map(item=>[item.time,item.source==='auto' && (item.website==='qmp4' || String(item.movieId || '').startsWith('qm5:')) ? '自动监控七味' : item.source==='auto' && (item.website==='jying' || String(item.movieId || '').startsWith('jy4:')) ? '自动监控聚影' : item.source==='auto' && (item.website==='btbtla' || String(item.movieId || '').startsWith('bt3:')) ? '自动监控BT影视' : item.source==='auto' && (item.website==='guanying' || String(item.movieId || '').startsWith('gy:')) ? '自动监控观影' : sources[item.source] || '历史记录',statuses[item.status] || item.status,item.title || '',item.folderName || '',item.url,publicSubmissionFeedback(item.message)].map(value=>String(value || '').replace(/[\r\n\t]+/g,' ')).join('\t'))].join('\n'));return rows.length;});
 ipcMain.handle('save-filtered-history-links', async (_event, rawLinks) => {
   const { prepareLinks, asText } = require('./filtered-link-export');
   const links = prepareLinks(rawLinks);

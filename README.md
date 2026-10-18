@@ -59,6 +59,7 @@ node tests/run-tests.cjs
 
 ## 开发资料
 
+- [Windows 1.2.75 115保存确认状态修复](cloudsave-windows/RELEASE-1.2.75.md)
 - [Windows 1.2.74 运行日志筛选](cloudsave-windows/RELEASE-1.2.74.md)
 
 - [Windows 1.2.73 复制当前页提交记录表格](cloudsave-windows/RELEASE-1.2.73.md)

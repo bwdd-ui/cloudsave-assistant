@@ -1,6 +1,6 @@
 (function(root){
  const sourceLabels={cloud:'115云下载',auto5:'自动监控七味',auto4:'自动监控聚影',auto3:'自动监控BT影视',auto2:'自动监控观影',auto:'自动监控不太灵磁力链接',manual:'手动提交',batch:'批量离线',legacy:'历史记录'};
- const statusLabels={success:'已成功提交离线',pending:'已成功提交离线',duplicate:'已提交自动跳过',uncertain:'提交待确认',placement_failed:'保存目录异常',legacy_accepted:'历史已接受',failed:'失败'};
+ const statusLabels={success:'已确认保存到目录',pending:'已加入离线任务，等待完成',duplicate:'已提交自动跳过',uncertain:'提交待确认',placement_failed:'保存目录异常',legacy_accepted:'历史已接受',unverified:'下载完成，位置未核实',failed:'失败'};
  function cleanCell(value){
   let text=String(value??'').replace(/[\r\n\t]+/g,' ').trim();
   if(/^[\s\u0000-\u001f]*[=+\-@]/.test(text))text="'"+text;
