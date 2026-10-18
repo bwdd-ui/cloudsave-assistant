@@ -71,7 +71,7 @@ async function test(name, fn) { try { await fn(); console.log('PASS ' + name); }
     h.ctx.fetchCloudCatalog=async mode=>({total: mode==='movie'?4:0,limit:4,items:mode==='movie'?[1,2,3,4].map(movie):[]});
     h.ctx.fetchMovieDetail=async id=>detail([seed(Number(id),'2GB','Version'+id,'2026-10-0'+(5-Number(id))+'T10:00:00+08:00')]);
     h.ctx.submitMagnet=async(c,url,cid,name,context)=>{submitted.push([url,context.source]); if(url===magnet(1))return '该磁力曾经添加过';if(url===magnet(2))throw Error('ordinary error');return '115已接受任务';};
-    const result=await h.run('runMonitor(true)'); assert.equal(result.saved,2); assert.equal(result.submissionFailures,1); assert.equal(result.duplicates,1); assert.equal(result.error,true);assert.equal(submitted.length,4);assert.equal(submitted.every(s=>s[1]==='auto'),true);assert.match(result.lastMessage,/提交失败或待确认 1 条/);
+    const result=await h.run('runMonitor(true)'); assert.equal(result.saved,2); assert.equal(result.submissionFailures,1); assert.equal(result.duplicates,1); assert.equal(result.error,true);assert.equal(submitted.length,4);assert.equal(submitted.every(s=>s[1]==='auto'),true);assert.match(result.lastMessage,/提交失败或待确认 1 条/);assert.match(result.lastMessage,/提交成功不代表已下载到目标目录/);assert.match(result.lastMessage,/核对下载状态和实际保存目录/);assert.match(h.get().monitor.lastMessage,/提交成功不代表已下载到目标目录/);
     assert.equal(h.get().monitorScan.phase,'complete');
   });
   await test('turnoff duringdetail preventsauto submissionandpreservescheckpoint',async()=>{

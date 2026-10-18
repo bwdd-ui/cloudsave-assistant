@@ -2017,7 +2017,7 @@ async function runMonitor(manual = false) {
           const seenAfterSubmit = new Set(monitorConfig().seen); seenAfterSubmit.add(item.key); saveMonitorMovieBest(item);
           if (/曾经添加过/.test(message)) { duplicates++; saveMonitor({ seen: [...seenAfterSubmit] }); appendMonitorLog(`已离线过，继续扫描补足数量：${item.movieTitle}`, 'info', item.url); continue; }
           saved++;
-          saveMonitor({ seen: [...seenAfterSubmit], saved: (monitorConfig().saved || 0) + 1, lastMessage: `已自动提交 ${saved} 条，目标目录：${currentFolder.name}` });
+          saveMonitor({ seen: [...seenAfterSubmit], saved: (monitorConfig().saved || 0) + 1, lastMessage: `已向115提交 ${saved} 条任务（下载完成及目录落盘待核验），目标目录：${currentFolder.name}` });
           appendMonitorLog(`扫描期间115已接受任务：${item.title || item.url}`, 'info', `${item.url}\n提交目标：${currentFolder.name}（CID ${currentFolder.cid}）\n目录状态：${message}`);
         } catch (error) {
           if (error.monitorCancelled) throw error;
@@ -2033,7 +2033,7 @@ async function runMonitor(manual = false) {
     failures += feeds.scanFailures || 0;
     appendMonitorLog(`本轮筛选扫描${feeds.quotaReached ? '已达到提交数量上限' : '完成'}：已检查 ${feeds.scanned} 部影片，已接受 ${saved} 条新任务${failures ? `；${failures} 部影片详情仍需重试` : ''}`, failures ? 'warning' : 'info');
     const remainder = feeds.filter(item => !attemptedKeys.has(item.key) && !monitorSeenKeys().has(item.key)).length;
-    const message = !config.autoSubmit ? `仅扫描模式：已检查 ${feeds.scanned} 部影片，缓存 ${scanExportSnapshot().rows.length} 条磁力；自动提交已关闭，可导出扫描结果` : !feeds.length && !failures && !saved ? '当前筛选范围检查完成，没有符合条件且尚未提交的磁力' : `本次115接受 ${saved} 条新任务，重复跳过 ${duplicates} 条，提交失败或待确认 ${submissionFailures} 条${remainder ? `，数量限制剩余 ${remainder} 条` : ''}${failures ? `，详情待重试 ${failures} 部` : ''}；实际落盘结果请查看离线任务`;
+    const message = !config.autoSubmit ? `仅扫描模式：已检查 ${feeds.scanned} 部影片，缓存 ${scanExportSnapshot().rows.length} 条磁力；自动提交已关闭，可导出扫描结果` : !feeds.length && !failures && !saved ? '当前筛选范围检查完成，没有符合条件且尚未提交的磁力' : `本次115接受 ${saved} 条新任务（提交成功不代表已下载到目标目录），重复跳过 ${duplicates} 条，提交失败或待确认 ${submissionFailures} 条${remainder ? `，数量限制剩余 ${remainder} 条` : ''}${failures ? `，详情待重试 ${failures} 部` : ''}；请在离线任务核对下载状态和实际保存目录`;
     // 保留提交错误的候选供补交；正常完成后从最新更新时间重新检查筛选范围。
     const recovery = readConfig().monitorScan?.recoveryPass || 0;
     if ((!submissionFailures && !failures) || recovery >= 1) clearMonitorScan(feeds.signature);
