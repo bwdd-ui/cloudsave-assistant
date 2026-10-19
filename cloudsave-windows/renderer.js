@@ -267,11 +267,12 @@ function renderSubmissionRows() {
   const source = $('submitHistorySource').value; const state = $('submitHistoryStatusFilter').value;
   const query=$('submitHistorySearch').value.trim(),terms=window.cloudsaveHistorySearch.tokens(query);
   const dateFrom=$('submitHistoryDateFrom').value,dateTo=$('submitHistoryDateTo').value,dateRangeValid=window.cloudsaveHistorySearch.validDateRange(dateFrom,dateTo);
-  const signature = JSON.stringify([source,state,cloudHistoryFilter,terms,dateFrom,dateTo,submissionSort]);
+  const waitAge=$('submitHistoryWaitAge').value||'all';
+  const signature = JSON.stringify([source,state,cloudHistoryFilter,terms,dateFrom,dateTo,submissionSort,waitAge]);
   if (signature !== submissionFilterSignature) { submissionPage = 1; submissionFilterSignature = signature; }
   const counts=submissionStatusCounts(submissionRows);
   $('submitHistoryCounts').innerHTML = [['all', '总数', counts.all], ['submitted', '已提交/待核对', counts.submitted], ['duplicate', '已提交自动跳过', counts.duplicate], ['attention','需要关注',counts.attention]].map(([key, label, total]) => `<button type="button" class="submission-count-filter${state === key && (key !== 'all' || source === 'all') ? ' active' : ''}" data-history-status="${key}" aria-pressed="${state === key && (key !== 'all' || source === 'all')}"><b>${total}</b>${label}</button>`).join('');
-  $('submitHistoryCounts').querySelectorAll('[data-history-status]').forEach(button => button.onclick = () => { cloudHistoryFilter='all';$('submitHistoryStatusFilter').value = button.dataset.historyStatus; if (button.dataset.historyStatus === 'all') {$('submitHistorySource').value = 'all';} renderSubmissionRows(); });
+  $('submitHistoryCounts').querySelectorAll('[data-history-status]').forEach(button => button.onclick = () => { cloudHistoryFilter='all';$('submitHistoryStatusFilter').value = button.dataset.historyStatus;$('submitHistoryWaitAge').value='all'; if (button.dataset.historyStatus === 'all') {$('submitHistorySource').value = 'all';} renderSubmissionRows(); });
   let visible;
   const cloudTasks=cloudSyncState.tasks || [],cloudCounts=cloudSyncState.counts || {downloading:0,failed:0,completed:0,unknown:0};
   if(cloudHistoryFilter==='all')visible=submissionRows.filter(item=>(source==='all'||submissionSource(item)===source)&&submissionMatchesState(item,state));
@@ -286,6 +287,10 @@ function renderSubmissionRows() {
   if(terms.length)visible=visible.filter(item=>window.cloudsaveHistorySearch.matches(item,terms));
   if(dateFrom||dateTo)visible=visible.filter(item=>window.cloudsaveHistorySearch.matchesDateRange(item,dateFrom,dateTo));
   if(!dateRangeValid)visible=[];
+  if(waitAge!=='all'){
+    const thresholdMs=Number(waitAge)*60000,now=Date.now();
+    visible=visible.filter(item=>{const time=Date.parse(String(item.time||''));return submissionStatus(item)==='pending'&&Number.isFinite(time)&&time<=now&&now-time>=thresholdMs;});
+  }
   if(submissionSort!=='default')visible=visible.map((item,index)=>({item,index,time:Date.parse(String(item.time||''))})).sort((a,b)=>{
     const aValid=Number.isFinite(a.time),bValid=Number.isFinite(b.time);
     if(!aValid||!bValid)return aValid===bValid?a.index-b.index:aValid?-1:1;
@@ -309,16 +314,18 @@ function renderSubmissionRows() {
   exportFilteredButton.disabled=!exportableRows.length;
   exportFilteredButton.textContent=exportableRows.length?`导出当前筛选为Excel（${exportableRows.length}）`:'导出当前筛选为Excel';
   $('cloudDownloadCounts').innerHTML=[['downloading','正在下载'],['failed','下载失败'],['completed','已完成'],['unknown','状态待确认']].map(([value,label])=>`<button type="button" class="submission-count-filter ${cloudHistoryFilter===value?'active':''}" data-cloud-status="${value}"><b>${cloudCounts[value] || 0}</b>${label}</button>`).join('')+`<span class="sub">当前115账号全部云下载任务 · 上次同步缓存 · “状态待确认”表示接口状态未识别，不代表已保存 · 再次点击取消筛选</span>`;
-  $('cloudDownloadCounts').querySelectorAll('[data-cloud-status]').forEach(button=>button.onclick=()=>{cloudHistoryFilter=cloudHistoryFilter===button.dataset.cloudStatus?'all':button.dataset.cloudStatus;$('submitHistorySource').value='all';$('submitHistoryStatusFilter').value='all';renderSubmissionRows();});
+  $('cloudDownloadCounts').querySelectorAll('[data-cloud-status]').forEach(button=>button.onclick=()=>{cloudHistoryFilter=cloudHistoryFilter===button.dataset.cloudStatus?'all':button.dataset.cloudStatus;$('submitHistorySource').value='all';$('submitHistoryStatusFilter').value='all';$('submitHistoryWaitAge').value='all';renderSubmissionRows();});
   $('submitHistoryStatus').textContent=cloudHistoryFilter==='all'?`显示 ${visible.length} / ${submissionRows.length} 条本地提交记录 · 新记录在上方`:`显示 ${visible.length} 条115云下载任务 · 包括未在本软件提交的任务`;
+  if(waitAge!=='all')$('submitHistoryStatus').textContent+=' · 仅显示至少等待'+({60:'1小时',360:'6小时',1440:'24小时',4320:'3天'}[waitAge]||'指定时长')+'的待核验记录';
   if(terms.length)$('submitHistoryStatus').textContent+=' · 已应用本地关键词搜索';
   if(dateFrom||dateTo)$('submitHistoryStatus').textContent+=dateRangeValid?' · 已应用日期范围筛选':' · 开始日期不能晚于结束日期';
-  $('clearSubmitHistorySearch').disabled=!query&&!dateFrom&&!dateTo&&source==='all'&&state==='all'&&cloudHistoryFilter==='all';
+  $('clearSubmitHistorySearch').disabled=!query&&!dateFrom&&!dateTo&&waitAge==='all'&&source==='all'&&state==='all'&&cloudHistoryFilter==='all';
   const pages = Math.max(1, Math.ceil(visible.length / submissionPageSize));
   submissionPage = Math.min(pages, Math.max(1, submissionPage));
   $('historyPageInfo').textContent = `${submissionPage} / ${pages} 页 · 每页 ${submissionPageSize} 条`;
   $('submissionPageSize').value = String(submissionPageSize);
   $('submitHistorySort').value = submissionSort;
+  $('submitHistoryWaitAge').value = waitAge;
   $('historyPrevPage').disabled = submissionPage <= 1; $('historyNextPage').disabled = submissionPage >= pages;
   const currentPageRows=visible.slice((submissionPage-1)*submissionPageSize,submissionPage*submissionPageSize);
   const copyCurrentPageButton=$('copyCurrentSubmitHistoryPage');copyCurrentPageButton.disabled=!currentPageRows.length;copyCurrentPageButton.textContent=currentPageRows.length?`复制本页记录（${currentPageRows.length}）`:'复制本页记录';
@@ -355,6 +362,7 @@ $('showOfflineTasks').onclick = showOfflineTasksPage;
 function openPendingPlacementHistory() {
   $('submitHistorySource').value = 'all';
   $('submitHistoryStatusFilter').value = 'pending';
+  $('submitHistoryWaitAge').value = 'all';
   $('submitHistorySearch').value = '';
   $('submitHistoryDateFrom').value = '';
   $('submitHistoryDateTo').value = '';
@@ -370,12 +378,13 @@ $('historyNextPage').onclick = () => { submissionPage++; renderSubmissionRows();
 $('copyCurrentSubmitHistoryPage').onclick=async()=>{renderSubmissionRows();const rows=submissionFilteredRows.slice((submissionPage-1)*submissionPageSize,submissionPage*submissionPageSize);if(!rows.length)return;try{await navigator.clipboard.writeText(window.cloudsaveHistoryCopy.rowsToTsv(rows));$('submitHistoryStatus').textContent=`已复制当前第 ${submissionPage} 页的 ${rows.length} 条记录表格`;status(`已复制本页 ${rows.length} 条记录`);}catch(error){$('submitHistoryStatus').textContent='本页记录复制失败：'+error.message;status(error.message,true);}};
 $('submissionPageSize').onchange = () => { const value = Number($('submissionPageSize').value); submissionPageSize = [25, 50, 100].includes(value) ? value : 50; try { localStorage.setItem('offlineHistoryPageSize', String(submissionPageSize)); } catch (_) {} submissionPage = 1; renderSubmissionRows(); };
 $('submitHistorySort').onchange = () => { const value = $('submitHistorySort').value; submissionSort = ['default', 'oldest', 'newest'].includes(value) ? value : 'default'; try { localStorage.setItem('offlineHistorySort', submissionSort); } catch (_) {} submissionPage = 1; renderSubmissionRows(); };
+$('submitHistoryWaitAge').onchange = () => { const value=$('submitHistoryWaitAge').value; if(value!=='all'&&['60','360','1440','4320'].includes(value)){$('submitHistoryStatusFilter').value='pending';cloudHistoryFilter='all';} else $('submitHistoryWaitAge').value='all'; submissionPage=1; renderSubmissionRows(); };
 $('submitHistorySource').onchange = ()=>{cloudHistoryFilter='all';renderSubmissionRows();};
-$('submitHistoryStatusFilter').onchange = ()=>{cloudHistoryFilter='all';renderSubmissionRows();};
+$('submitHistoryStatusFilter').onchange = ()=>{cloudHistoryFilter='all';$('submitHistoryWaitAge').value='all';renderSubmissionRows();};
 let submissionSearchTimer;
 $('submitHistorySearch').oninput=()=>{clearTimeout(submissionSearchTimer);submissionSearchTimer=setTimeout(renderSubmissionRows,180);};
 $('submitHistoryDateFrom').onchange=renderSubmissionRows;$('submitHistoryDateTo').onchange=renderSubmissionRows;
-$('clearSubmitHistorySearch').onclick=()=>{clearTimeout(submissionSearchTimer);$('submitHistorySearch').value='';$('submitHistoryDateFrom').value='';$('submitHistoryDateTo').value='';$('submitHistorySource').value='all';$('submitHistoryStatusFilter').value='all';cloudHistoryFilter='all';renderSubmissionRows();$('submitHistorySearch').focus();};
+$('clearSubmitHistorySearch').onclick=()=>{clearTimeout(submissionSearchTimer);$('submitHistorySearch').value='';$('submitHistoryDateFrom').value='';$('submitHistoryDateTo').value='';$('submitHistorySource').value='all';$('submitHistoryStatusFilter').value='all';$('submitHistoryWaitAge').value='all';cloudHistoryFilter='all';renderSubmissionRows();$('submitHistorySearch').focus();};
 $('submitHistorySearch').onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();clearTimeout(submissionSearchTimer);$('submitHistorySearch').value='';renderSubmissionRows();}};
 $('copyFilteredHistoryLinks').onclick=async()=>{renderSubmissionRows();const links=window.cloudsaveHistorySearch.uniqueLinks(submissionFilteredRows);if(!links.length)return;try{await navigator.clipboard.writeText(links.join('\n'));$('submitHistoryStatus').textContent='已复制 '+links.length+' 条去重链接（全部匹配页面） · '+$('submitHistoryStatus').textContent;status('已复制 '+links.length+' 条筛选链接');}catch(error){$('submitHistoryStatus').textContent='筛选链接复制失败：'+error.message;status(error.message,true);}};
 $('saveFilteredHistoryLinks').onclick=async()=>{renderSubmissionRows();const links=window.cloudsaveHistorySearch.uniqueLinks(submissionFilteredRows);if(!links.length)return;const button=$('saveFilteredHistoryLinks');button.disabled=true;let feedback;try{const result=await window.cloudsave.saveFilteredHistoryLinks(links);feedback=result.cancelled?'已取消保存筛选链接':`已保存 ${result.count} 条去重筛选链接：${result.path}`;}catch(error){feedback=`筛选链接保存失败：${error.message}`;}finally{button.disabled=false;renderSubmissionRows();$('submitHistoryStatus').textContent=feedback;}};
