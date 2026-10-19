@@ -222,6 +222,7 @@ let submissionFilteredRows = [];
 let submissionRefreshId = 0;
 let submissionPage = 1;
 let submissionPageSize = (() => { try { const value = Number(localStorage.getItem('offlineHistoryPageSize')); return [25, 50, 100].includes(value) ? value : 50; } catch (_) { return 50; } })();
+let submissionSort = (() => { try { const value = localStorage.getItem('offlineHistorySort'); return ['default', 'oldest', 'newest'].includes(value) ? value : 'default'; } catch (_) { return 'default'; } })();
 let submissionFilterSignature = "";
 let submissionUpdateTimer = null;
 let submissionHistoryDirty = false;
@@ -266,7 +267,7 @@ function renderSubmissionRows() {
   const source = $('submitHistorySource').value; const state = $('submitHistoryStatusFilter').value;
   const query=$('submitHistorySearch').value.trim(),terms=window.cloudsaveHistorySearch.tokens(query);
   const dateFrom=$('submitHistoryDateFrom').value,dateTo=$('submitHistoryDateTo').value,dateRangeValid=window.cloudsaveHistorySearch.validDateRange(dateFrom,dateTo);
-  const signature = JSON.stringify([source,state,cloudHistoryFilter,terms,dateFrom,dateTo]);
+  const signature = JSON.stringify([source,state,cloudHistoryFilter,terms,dateFrom,dateTo,submissionSort]);
   if (signature !== submissionFilterSignature) { submissionPage = 1; submissionFilterSignature = signature; }
   const counts=submissionStatusCounts(submissionRows);
   $('submitHistoryCounts').innerHTML = [['all', '总数', counts.all], ['submitted', '已提交/待核对', counts.submitted], ['duplicate', '已提交自动跳过', counts.duplicate], ['attention','需要关注',counts.attention]].map(([key, label, total]) => `<button type="button" class="submission-count-filter${state === key && (key !== 'all' || source === 'all') ? ' active' : ''}" data-history-status="${key}" aria-pressed="${state === key && (key !== 'all' || source === 'all')}"><b>${total}</b>${label}</button>`).join('');
@@ -285,6 +286,12 @@ function renderSubmissionRows() {
   if(terms.length)visible=visible.filter(item=>window.cloudsaveHistorySearch.matches(item,terms));
   if(dateFrom||dateTo)visible=visible.filter(item=>window.cloudsaveHistorySearch.matchesDateRange(item,dateFrom,dateTo));
   if(!dateRangeValid)visible=[];
+  if(submissionSort!=='default')visible=visible.map((item,index)=>({item,index,time:Date.parse(String(item.time||''))})).sort((a,b)=>{
+    const aValid=Number.isFinite(a.time),bValid=Number.isFinite(b.time);
+    if(!aValid||!bValid)return aValid===bValid?a.index-b.index:aValid?-1:1;
+    const difference=submissionSort==='oldest'?a.time-b.time:b.time-a.time;
+    return difference||a.index-b.index;
+  }).map(entry=>entry.item);
   submissionFilteredRows=visible;
   const copyableLinks=window.cloudsaveHistorySearch.uniqueLinks(visible);
   $('copyFilteredHistoryLinks').disabled=!copyableLinks.length;
@@ -311,6 +318,7 @@ function renderSubmissionRows() {
   submissionPage = Math.min(pages, Math.max(1, submissionPage));
   $('historyPageInfo').textContent = `${submissionPage} / ${pages} 页 · 每页 ${submissionPageSize} 条`;
   $('submissionPageSize').value = String(submissionPageSize);
+  $('submitHistorySort').value = submissionSort;
   $('historyPrevPage').disabled = submissionPage <= 1; $('historyNextPage').disabled = submissionPage >= pages;
   const currentPageRows=visible.slice((submissionPage-1)*submissionPageSize,submissionPage*submissionPageSize);
   const copyCurrentPageButton=$('copyCurrentSubmitHistoryPage');copyCurrentPageButton.disabled=!currentPageRows.length;copyCurrentPageButton.textContent=currentPageRows.length?`复制本页记录（${currentPageRows.length}）`:'复制本页记录';
@@ -361,6 +369,7 @@ $('historyPrevPage').onclick = () => { submissionPage--; renderSubmissionRows();
 $('historyNextPage').onclick = () => { submissionPage++; renderSubmissionRows(); };
 $('copyCurrentSubmitHistoryPage').onclick=async()=>{renderSubmissionRows();const rows=submissionFilteredRows.slice((submissionPage-1)*submissionPageSize,submissionPage*submissionPageSize);if(!rows.length)return;try{await navigator.clipboard.writeText(window.cloudsaveHistoryCopy.rowsToTsv(rows));$('submitHistoryStatus').textContent=`已复制当前第 ${submissionPage} 页的 ${rows.length} 条记录表格`;status(`已复制本页 ${rows.length} 条记录`);}catch(error){$('submitHistoryStatus').textContent='本页记录复制失败：'+error.message;status(error.message,true);}};
 $('submissionPageSize').onchange = () => { const value = Number($('submissionPageSize').value); submissionPageSize = [25, 50, 100].includes(value) ? value : 50; try { localStorage.setItem('offlineHistoryPageSize', String(submissionPageSize)); } catch (_) {} submissionPage = 1; renderSubmissionRows(); };
+$('submitHistorySort').onchange = () => { const value = $('submitHistorySort').value; submissionSort = ['default', 'oldest', 'newest'].includes(value) ? value : 'default'; try { localStorage.setItem('offlineHistorySort', submissionSort); } catch (_) {} submissionPage = 1; renderSubmissionRows(); };
 $('submitHistorySource').onchange = ()=>{cloudHistoryFilter='all';renderSubmissionRows();};
 $('submitHistoryStatusFilter').onchange = ()=>{cloudHistoryFilter='all';renderSubmissionRows();};
 let submissionSearchTimer;
