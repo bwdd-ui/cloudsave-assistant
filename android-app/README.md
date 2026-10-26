@@ -43,7 +43,7 @@ res/mipmap-*/ic_launcher.png               与套壳版同一套图标
 
 ## 手机端和桌面端共用一份站点逻辑
 
-`tools/bundle.cjs` 把 `cloudsave-windows/` 里的 7 个模块**原文内联**进一个自执行的模块表——不转译、不改写、不复制一份手机专用实现。站点改版时修一次，两边一起生效。
+`tools/bundle.cjs` 把 `cloudsave-windows/` 里的 7 个模块**原文内联**进一个自执行的模块表——不转译、不改写逻辑、不复制一份手机专用实现；唯一动过字节的地方是把检出时被 `core.autocrlf` 改成的 CRLF 归回仓库里存的那个 LF（见下面「进 apk 的源码必须是 LF」）。站点改版时修一次，两边一起生效。
 
 | 模块 | 手机端用它做什么 |
 | --- | --- |
@@ -170,7 +170,7 @@ SHA-256: 26a90120d2053d6ada0e9fe27ec590bc23a68f33d174164e753c31de4b8fdfb2
 
 - 发布签名构建通过；`apksigner verify` v1/v2/v3 为 true；`zipalign -c 4` 通过。
 - 产物 `CloudSave-Standalone-0.1.2.apk`：124,156 字节，sha256 `2964ab3edaf716d8253de8c10aba0b04915fd0b76efcf2950d0bc40851aaa043`。
-- **这个包现在真的可复现**：另开一份全新克隆（本机 `core.autocrlf=true` 照旧开着）、放在另一个目录里、用同一条 `build.ps1 -Release` 命令构建，产出的 apk 与上面**逐字节相同**。修之前不是这样，有两处泄漏：apk 里内联的源码跟着检出换成过 CRLF（同一提交差 367 字节），以及 zip 条目带着构建时刻的时间戳（内容一样、哈希不一样）。所以先前打的那次 0.1.2 已作废重打，旧字节归档在备份的 `superseded/apk/`，别装。
+- **这个包现在真的可复现**：另开一份全新克隆（本机 `core.autocrlf=true` 照旧开着）、放在另一个目录里、用同一条 `build.ps1 -Release` 命令构建，产出的 apk 与上面**逐字节相同**。修之前不是这样，有两处泄漏：apk 里内联的源码跟着检出换成过 CRLF（同一提交差 367 字节），以及 zip 条目带着构建时刻的时间戳（内容一样、哈希不一样）。这一版因此在同一轮里重打过三次，中间两次的字节没留档（从没交到任何手机上），只记哈希以备对照：`e0abc297…`（内联源码是 CRLF）→ `d83c0f11…`（条目时间戳还没固定）→ 现在这个 `2964ab3e…`。
   说清楚边界：这只证明**同版本工具链**下可复现。d8/aapt2/JDK 换个版本大概率还是不同的包，所以我给的核对依据是「条目内容 + 包内版本 + 证书指纹」，整包 sha 只在同工具链时可比。
 - 干净克隆里全量测试同样通过：**153/153**。这条也是这轮补上的——以前 `git am`/`git clone` 出来的树里 `test-android-preview.cjs` 必红，因为产物不入库又没人先生成它。
 - `aapt2 dump badging`：包名、versionCode 3 / versionName 0.1.2、minSdk 23、targetSdk 34、只有 INTERNET、启动 Activity 正确。
