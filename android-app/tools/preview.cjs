@@ -154,10 +154,10 @@ const server = http.createServer((request, response) => {
   response.end(body);
 });
 
-if (!fs.existsSync(path.join(WWW, 'cloudsave-modules.js'))) {
-  console.error('还没有打包产物，先跑：node android-app/tools/bundle.cjs');
-  process.exit(1);
-}
+// 打包产物不入库，而且必须等于当前源码：所以每次启动重新打一次。
+// 少这一步会有两种坏结果——干净检出里这个工具只会让人先去手跑 bundle.cjs（于是没人用它的测试），
+// 或者更糟：留着上一次的旧产物，浏览器里验了半天验的是旧代码。
+fs.writeFileSync(path.join(WWW, 'cloudsave-modules.js'), require('./bundle.cjs').build());
 server.listen(port, '127.0.0.1', () => {
   console.log(`手机页面预览：http://127.0.0.1:${port}/  （存储 ${dataFile}）`);
   console.log('原生桥里 login 是打开系统 WebView 登录窗，这里只打印一行；要验凭据路径请粘贴 Cookie。');

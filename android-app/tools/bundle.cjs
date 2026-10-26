@@ -27,7 +27,12 @@ const HOST_PROVIDED = {
 function read(name) {
   const file = path.join(SOURCE_DIR, name);
   if (!fs.existsSync(file)) throw new Error(`缺少源文件 ${file}`);
-  return fs.readFileSync(file, 'utf8');
+  const text = fs.readFileSync(file, 'utf8');
+  // 内联是逐字节复制，所以检出方式会直接决定 apk 里的字节。仓库里存的是 LF，
+  // 这里若读到 CRLF，说明这份检出被 core.autocrlf 改写过（.gitattributes 已要求 eol=lf），
+  // 必须停下来让人重新检出，而不是悄悄打出一个和别人算不出同一个哈希的包。
+  if (text.includes('\r')) throw new Error(`${name}: 源文件带 CRLF 换行，打出的 apk 会随检出方式变化。请重新检出（git checkout -- .），别用 autocrlf 改写过的工作副本打包。`);
+  return text;
 }
 
 // 模块内部写的是 require('./share115-verify')，带点且可能省扩展名，打包期统一解析成清单里的名字。

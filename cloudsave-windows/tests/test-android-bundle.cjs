@@ -283,5 +283,13 @@ function sandbox(options = {}) {
   const emitted = path.join(app, 'assets', 'www', 'cloudsave-modules.js');
   if (fs.existsSync(emitted)) assert.equal(read(emitted), code, 'APK 里的模块是旧构建，重新跑 node tools/bundle.cjs');
 
-  console.log('PASS 打包清单与内联源码、无 require 环境求值、导出对得上、依赖表与运行时注入登记、桌面端解析一致、打包后转存与逐项核验、未核验落地仍报 uncertain、资源库目录与详情跑得通且缺失才报「只在桌面端」、分片与换账户语义保留、不强制登录、原生桥仅 HTTPS、脚本顺序与控件引用齐全、产物不陈旧');
+  // 12. 同一份提交在任何机器上都要算出同一个包。打包是逐字节内联，所以源码换行必须是 LF；
+  // 宿主 core.autocrlf=true 会在检出时改成 CRLF，那台机器打出的 apk 就和这台的差几十个字节。
+  assert.doesNotMatch(code, /\r/, '打包结果里有 CRLF 换行：这份检出改过源码换行，apk 不再是可复现的');
+  const attrs = read(path.join(app, '..', '.gitattributes'));
+  for (const kind of ['*.js', '*.cjs', '*.html', '*.css'])
+    assert.match(attrs, new RegExp(kind.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' text eol=lf'),
+      `.gitattributes 少了「${kind} text eol=lf」，检出换行会随本机 core.autocrlf 变化`);
+
+  console.log('PASS 打包清单与内联源码、无 require 环境求值、导出对得上、依赖表与运行时注入登记、桌面端解析一致、打包后转存与逐项核验、未核验落地仍报 uncertain、资源库目录与详情跑得通且缺失才报「只在桌面端」、分片与换账户语义保留、不强制登录、原生桥仅 HTTPS、脚本顺序与控件引用齐全、产物不陈旧、换行随检出稳定');
 })().catch(error => { console.error(error); process.exitCode = 1; });

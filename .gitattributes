@@ -7,3 +7,11 @@ fnos/cloudsave/cmd/* text eol=lf
 fnos/cloudsave/manifest text eol=lf
 fnos/cloudsave/config/* text eol=lf
 fnos/cloudsave/wizard/* text eol=lf
+# 手机端把这几个类型的源文件原样内联/复制进 apk（tools/bundle.cjs 与 assets/www）。
+# 宿主 git core.autocrlf=true 时，检出会把它们换成 CRLF，于是 apk 的字节随检出方式变化：
+# 同一份提交在两台机器上算不出同一个 apk，也没法再说「手机上跑的就是仓库里那份」。
+*.js text eol=lf
+*.cjs text eol=lf
+*.mjs text eol=lf
+*.html text eol=lf
+*.css text eol=lf

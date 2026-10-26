@@ -36,6 +36,10 @@ function request(port, method, route, body) {
       probe.close(() => resolve(taken));
     });
   });
+  // 产物是构建期生成的、不入库。这里故意先写一份旧的，验证预览服务自己重新打包：
+  // 干净检出里不该需要人手跑 bundle.cjs，更不能在旧产物上验界面（那等于什么都没验）。
+  const modules = path.join(www, 'cloudsave-modules.js');
+  fs.writeFileSync(modules, '// 故意留下的旧产物\n');
   const dataFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cs-preview-')), 'store.json');
   const child = spawn(process.execPath, [tool, '--port', String(port), '--data', dataFile], { stdio: ['ignore', 'pipe', 'pipe'] });
   let output = '';
@@ -51,6 +55,9 @@ function request(port, method, route, body) {
       if (Date.now() > deadline) throw new Error('预览服务起不来：' + (output || '没有输出'));
       await new Promise(resolve => setTimeout(resolve, 200));
     }
+
+    // 0. 起服务必须已经把产物重打成当前源码——否则下面验的全是上一次留下的旧代码。
+    assert.ok(!fs.readFileSync(modules, 'utf8').includes('故意留下的旧产物'), '预览服务没重新打包，浏览器里验的是旧产物');
 
     // 1. 注入的那行桥脚本只存在于服务响应里，磁盘上的 index.html 与 apk 里那份完全一致。
     const served = (await request(port, 'GET', '/')).text;
@@ -90,7 +97,7 @@ function request(port, method, route, body) {
     // 6. 未知接口要报错，而不是悄悄回一个空响应让页面以为成功。
     assert.match(JSON.parse((await request(port, 'POST', '/__nope', {})).text).error, /未知的预览接口/);
 
-    console.log('PASS 预览服务：注入不改盘、页面引用全部可取、仅 HTTPS 出站、secrets/plain 分间并落盘、目录不逃逸、未知接口报错');
+    console.log('PASS 预览服务：起服务先重打包、注入不改盘、页面引用全部可取、仅 HTTPS 出站、secrets/plain 分间并落盘、目录不逃逸、未知接口报错');
   } finally {
     stop();
   }
