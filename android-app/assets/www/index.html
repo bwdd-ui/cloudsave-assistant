@@ -17,10 +17,57 @@
   </div>
 </header>
 
+<nav class="tabs">
+  <button id="tab-library" class="tab">资源库</button>
+  <button id="tab-transfer" class="tab">转存</button>
+</nav>
+
 <main>
+<div id="panel-library">
   <section class="card">
-    <h2>1. 登录</h2>
-    <p class="hint">点「登录」会打开 115 的网页，扫码或输入账号密码登录成功后返回即可，凭据从系统 WebView 里读取，只存在这台手机上。</p>
+    <h2>资源库 <span class="free">不需要登录</span></h2>
+    <p class="hint">这里浏览的是资源网站本身的列表与种子，和网盘登录无关；解析用的是桌面端同一份站点代码。</p>
+    <div class="row-line">
+      <label class="pick">站点 <select id="lib-site"><option value="btbtla">BT影视</option></select></label>
+      <label class="pick">分类 <select id="lib-category">
+        <option value="mv">电影</option>
+        <option value="tv">剧集</option>
+        <option value="updates">最新上传</option>
+      </select></label>
+    </div>
+    <div class="row-line">
+      <label class="pick">类型 <select id="lib-genre"></select></label>
+      <label class="pick">地区 <select id="lib-region"></select></label>
+    </div>
+    <div class="row-line">
+      <label class="pick">年份 <select id="lib-year"></select></label>
+      <label class="pick">排序 <select id="lib-sort"></select></label>
+    </div>
+    <div class="row-line">
+      <input id="lib-search" type="search" placeholder="搜索片名（改完自动查）" autocomplete="off" spellcheck="false">
+      <button id="lib-go">重新加载</button>
+    </div>
+    <p id="lib-status" class="summary"></p>
+    <div id="lib-items" class="grid"></div>
+    <div class="pager">
+      <button id="lib-prev" class="small">上一页</button>
+      <span id="lib-page"></span>
+      <button id="lib-next" class="small">下一页</button>
+    </div>
+  </section>
+
+  <section id="lib-detail" class="card" hidden>
+    <h2 id="lib-detail-title"></h2>
+    <p id="lib-detail-meta" class="hint"></p>
+    <div id="lib-seeds"></div>
+    <button id="lib-detail-close" class="ghost">返回资源库</button>
+  </section>
+</div>
+
+<div id="panel-transfer" hidden>
+  <section class="card">
+    <h2>1. 登录 115</h2>
+    <p class="hint">只有转存需要这一步。点「登录」会打开 115 的网页，扫码或输入账号密码登录成功后返回即可，凭据从系统 WebView 里读取，只存在这台手机上。</p>
     <button id="paste-toggle" class="ghost">改用手动粘贴 Cookie</button>
     <div id="paste-box" hidden>
       <textarea id="cookie" rows="3" placeholder="UID=…; CID=…; SEID=…" autocapitalize="off" autocomplete="off" spellcheck="false"></textarea>
@@ -50,7 +97,9 @@
     <p id="summary" class="summary"></p>
     <label class="check"><input id="verify" type="checkbox" checked><span>转存后逐项核验目标目录（更稳，但每个目录要多等一秒）</span></label>
     <div class="status-row"><span id="busy" class="busy"></span><button id="cancel" class="small right" hidden>取消</button></div>
+    <p class="hint">这一版只做到「分享链接 → 转存」。磁力离线下载、其它网盘、监控任务还只在桌面端有。</p>
   </section>
+</div>
 
   <section class="card">
     <h2>运行日志 <button id="clear-log" class="small right">清空</button></h2>
@@ -62,6 +111,8 @@
 
 <script src="cloudsave-modules.js"></script>
 <script src="host.js"></script>
+<script src="shell.js"></script>
 <script src="app.js"></script>
+<script src="library.js"></script>
 </body>
 </html>

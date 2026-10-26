@@ -19,12 +19,11 @@
     return;
   }
 
-  // 语法门槛：仓库里的站点模块用了 ?. 和 ??，需要 Chrome/WebView 80 以上。
-  try {
-    // eslint-disable-next-line no-new-func
-    new Function('var o={a:null};return o?.a ?? 1');
-  } catch (error) {
-    fail('系统 WebView 版本过旧，无法运行界面逻辑。请到系统应用里把 Android System WebView 升级到 80 以上。');
+  // 版本门槛：不用 new Function 探测语法，因为打包进来的站点代码本身就只能被足够新的引擎解析——
+  // 解析失败时 window.CloudSave 根本不存在，这个判据比 eval 出来的样例更准（也不依赖 eval）。
+  // Array.prototype.at 是运行时才用到的（Chrome 92），语法探测抓不到它，单独判一下。
+  if (!window.CloudSave || !Array.prototype.at) {
+    fail('系统 WebView 版本过旧，无法运行界面逻辑。请到系统应用里把 Android System WebView 升级到 92 以上。');
     return;
   }
 

@@ -1,12 +1,16 @@
-// 手机端 115 应用层：登录、选目录、扫描分享、转存。
+// 转存面板：115 登录、选目录、扫描分享、分片转存。
 // 这里只做界面与编排，接口判定全部走 cloudsave-modules.js 里那份和桌面端同源的代码。
+// 标签切换与日志在 shell.js；资源库在 library.js，它不依赖这里的任何登录状态。
 (function () {
   'use strict';
 
+  var phone = window.CsPhone;
   var modules = window.CloudSave || {};
   var api = modules['share115-api.js'];
   var share115 = modules['share115-provider.js'];
-  if (!api || !share115) return;
+  if (!phone || !api || !share115) return;
+
+  var $ = phone.$;
 
   function request(url, options, cookie) { return api.requestJson(globalThis.fetch, url, options, cookie); }
 
@@ -19,18 +23,9 @@
   var state = { cookie: '', account: null, folder: null, cid: '0', busy: false, cancel: false, scanned: null };
   var CHUNK = 50;
 
-  function $(id) { return document.getElementById(id); }
-  var logBox = $('log');
-
-  function log(message, level) {
-    window.CsStore.log(level || 'info', message);
-    var line = document.createElement('div');
-    line.className = 'line ' + (level || 'info');
-    line.textContent = new Date().toLocaleTimeString() + '  ' + message;
-    logBox.appendChild(line);
-    while (logBox.children.length > 200) logBox.removeChild(logBox.firstChild);
-    logBox.scrollTop = logBox.scrollHeight;
-  }
+  function log(message, level) { phone.log(message, level); }
+  var note = phone.note;
+  var human = phone.human;
 
   function active() {
     if (state.cancel) throw new Error('已取消');
@@ -140,20 +135,6 @@
     }
   }
 
-  function note(text) {
-    var div = document.createElement('div');
-    div.className = 'note';
-    div.textContent = text;
-    return div;
-  }
-
-  function human(bytes) {
-    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
-    return (bytes / Math.pow(1024, index)).toFixed(index ? 2 : 0) + ' ' + units[index];
-  }
-
   async function scan() {
     state.scanned = null;
     $('summary').textContent = '';
@@ -240,11 +221,6 @@
     $('scan').addEventListener('click', function () { scan(); });
     $('transfer').addEventListener('click', function () { transfer(); });
     $('cancel').addEventListener('click', function () { state.cancel = true; log('取消请求已记下，正在当前这一步结束后停下…', 'warning'); });
-    $('clear-log').addEventListener('click', function () { logBox.textContent = ''; });
-    $('about').textContent = (function () {
-      var info = window.CsStore.info();
-      return '云存助手 手机独立版 ' + (info.version || '?') + ' · WebView ' + (info.webview || '?');
-    })();
   }
 
   window.CsHost.onLogin = function (payload) {
