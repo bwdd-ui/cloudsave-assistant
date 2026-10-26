@@ -2,8 +2,10 @@
 // 这里证明两者是同一份代码，而且那份代码在 WebView 的最小环境里真的能跑起来。
 const assert = require('assert/strict');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const vm = require('vm');
+const { execFileSync } = require('child_process');
 const repo = path.resolve(__dirname, '..');
 const app = path.resolve(repo, '..', 'android-app');
 const bundle = require(path.join(app, 'tools', 'bundle.cjs'));
@@ -37,7 +39,9 @@ function sandbox(options = {}) {
   for (const name of bundle.MODULES) assert.ok(fs.existsSync(path.join(repo, name)), name + ' 不在了，手机端会缺模块');
 
   const code = bundle.build();
-  const sources = bundle.MODULES.map(name => read(path.join(repo, name)));
+  // 比对用「仓库里那份」的换行形式：检出被 autocrlf 改过时，源文件在盘上是 CRLF，
+  // 而打进包里的必须是 LF（提交里存的就是 LF），所以这里先把读出来的源码归一。
+  const sources = bundle.MODULES.map(name => read(path.join(repo, name)).replace(/\r\n/g, '\n'));
 
   // 2. 直接内联源文件，不转译不改写：手机跑的每个字节都是仓库里的那一份。
   for (const source of sources) assert.ok(code.includes(source), '打包结果和源文件不一致，bundle 被改成了另一份实现');
@@ -283,9 +287,25 @@ function sandbox(options = {}) {
   const emitted = path.join(app, 'assets', 'www', 'cloudsave-modules.js');
   if (fs.existsSync(emitted)) assert.equal(read(emitted), code, 'APK 里的模块是旧构建，重新跑 node tools/bundle.cjs');
 
-  // 12. 同一份提交在任何机器上都要算出同一个包。打包是逐字节内联，所以源码换行必须是 LF；
-  // 宿主 core.autocrlf=true 会在检出时改成 CRLF，那台机器打出的 apk 就和这台的差几十个字节。
-  assert.doesNotMatch(code, /\r/, '打包结果里有 CRLF 换行：这份检出改过源码换行，apk 不再是可复现的');
+  // 12. 同一份提交在任何机器上都要算出同一个包。宿主 core.autocrlf=true 时检出会把源码改成 CRLF，
+  // 而打包是逐字节内联，所以这里照那份「被改过的检出」真打一遍：结果必须和这里一个字节都不差。
+  assert.doesNotMatch(code, /\r/, '打包结果里有 CRLF 换行：apk 会随检出方式变化，不再可复现');
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'cs-eol-'));
+  try {
+    const tools = path.join(scratch, 'android-app', 'tools');
+    fs.mkdirSync(tools, { recursive: true });
+    fs.copyFileSync(path.join(app, 'tools', 'bundle.cjs'), path.join(tools, 'bundle.cjs'));
+    fs.mkdirSync(path.join(scratch, 'cloudsave-windows'), { recursive: true });
+    for (const name of bundle.MODULES)
+      fs.writeFileSync(path.join(scratch, 'cloudsave-windows', name), read(path.join(repo, name)).replace(/\n/g, '\r\n'));
+    const report = execFileSync(process.execPath, [path.join(tools, 'bundle.cjs')], { cwd: scratch, encoding: 'utf8' });
+    assert.match(report, /CRLF 归一/, 'CRLF 检出没走归一这条路，测试没测到东西');
+    assert.equal(read(path.join(scratch, 'android-app', 'assets', 'www', 'cloudsave-modules.js')), code,
+      'CRLF 检出打出了另一个包，apk 哈希不可复现');
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+  // .gitattributes 是这条的第一道保险：检出就直接给 LF，别把它删了。
   const attrs = read(path.join(app, '..', '.gitattributes'));
   for (const kind of ['*.js', '*.cjs', '*.html', '*.css'])
     assert.match(attrs, new RegExp(kind.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' text eol=lf'),

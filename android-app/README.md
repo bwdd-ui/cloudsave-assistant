@@ -97,7 +97,7 @@ cd android-app
 
 - **`javac -parameters` 不能去掉**：JDK 21 会给内部类合成的 `this$0` 写一个名字为 null 的 `MethodParameters` 条目，build-tools 34.0.0 的 d8 读到就 `NullPointerException`。
 - **`build.ps1` 只能写 ASCII**：Windows PowerShell 5.1 对无 BOM 的 `.ps1` 按本机代码页解码，中文注释会把脚本读碎。界面文案在 `assets/` 和 `res/values/strings.xml` 里，那些是 UTF-8 数据，不受影响。
-- **进 apk 的源码必须是 LF**：apk 里的 `cloudsave-modules.js` 是把桌面端 7 个模块**逐字节内联**出来的，`assets/www/` 其余文件也是逐字节复制。仓库里存的是 LF，但 Windows 上 `core.autocrlf=true` 会在检出时改成 CRLF——那样同一份提交在两台机器上打出不同的 apk（实测差 367 字节），我也就没法再说「手机上跑的就是仓库里那份」。`.gitattributes` 因此把 `*.js *.cjs *.mjs *.html *.css` 钉成 `eol=lf`，`tools/bundle.cjs` 读到带 CR 的源文件直接报错，测试再断言产物里没有 `\r`。
+- **进 apk 的源码必须是 LF**：apk 里的 `cloudsave-modules.js` 是把桌面端 7 个模块**逐字节内联**出来的，`assets/www/` 其余文件也是逐字节复制。仓库里存的是 LF，但 Windows 上 `core.autocrlf=true` 会在检出时改成 CRLF——那样同一份提交在两台机器上打出不同的 apk（实测差 367 字节），我也就没法再说「手机上跑的就是仓库里那份」。两道保险：`.gitattributes` 把 `*.js *.cjs *.mjs *.html *.css` 钉成 `eol=lf`（新检出直接给 LF）；`tools/bundle.cjs` 读到 CRLF 就归一回 LF 并在控制台点名哪些文件被这台机器的 git 改过，所以内联进去的永远等于提交里的字节。`build.ps1` 再挡一道：页面文件里还有 CR 就停止构建，因为它复制的是磁盘字节，归一只能发生在打包之前而不是包里。测试拿一份 CRLF 的源文件真打一遍，要求结果和这里逐字节相同。
 - **assets 不能用 `aapt2 link -A`**：Windows 上的 aapt2 会把目录条目写成 `assets/www\index.html`（前缀用 `/`、相对段用 `\`），Android 的 `AssetManager` 认不出来，WebView 起手就是 `net::ERR_FILE_NOT_FOUND`。所以 `build.ps1` 里 `aapt2 link` 不带 `-A`，assets 由 step 4 逐个用正斜杠名字写进 zip，step 7 再按字节读一遍中央目录做门禁：任何条目名里有 `\`、或者缺必需条目，构建直接失败。
 - **必需条目从 `index.html` 推出来**：step 7 解析页面里 `src`/`href` 指向的本地文件，逐个要求它们在 apk 里。往页面加一个脚本不必同时记得改构建脚本——名单落后一步，手机上就是一个打不开的 `ERR_FILE_NOT_FOUND`，正是 0.1.0 踩过的那类坑。
 

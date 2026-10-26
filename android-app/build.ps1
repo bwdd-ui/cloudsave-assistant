@@ -86,16 +86,33 @@ Checked 'd8'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $unsigned = Join-Path $build 'standalone-unsigned.apk'
 Copy-Item (Join-Path $build 'linked.apk') $unsigned
+# A zip entry carries a modified timestamp, and that timestamp is part of the signed bytes: two
+# builds of identical content hashed differently here until the stamp was pinned to a fixed value.
+$stamp = [System.DateTimeOffset]::new(2024, 1, 1, 0, 0, 0, [System.TimeSpan]::Zero)
 $zip = [System.IO.Compression.ZipFile]::Open($unsigned, 'Update')
 try {
-  [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+  $entry = [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
     $zip, (Join-Path $build 'dex\classes.dex'), 'classes.dex')
+  $entry.LastWriteTime = $stamp
   $assetRoot = (Join-Path $root 'assets')
+  # Page files go into the apk byte for byte, so their line endings decide the artifact hash.
+  # A working copy made with core.autocrlf=true (or one older than the .gitattributes eol=lf
+  # rules) turns them into CRLF and silently ships a different apk than everyone else builds.
+  foreach ($file in Get-ChildItem $assetRoot -Recurse -File -Include '*.html', '*.css', '*.js') {
+    if ([System.IO.File]::ReadAllBytes($file.FullName) -contains 13) {
+      throw "asset $((Get-Item $file.FullName).Name) contains CR bytes; delete it and run 'git checkout -- .' to get the LF copy this repo stores (or set core.autocrlf=input) - otherwise the apk you build is not the apk anyone else can reproduce"
+    }
+  }
   foreach ($file in Get-ChildItem $assetRoot -Recurse -File) {
     $relative = $file.FullName.Substring($assetRoot.Length).TrimStart('\').Replace('\', '/')
-    [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+    $entry = [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
       $zip, $file.FullName, "assets/$relative")
+    $entry.LastWriteTime = $stamp
   }
+  # aapt2 stamps the entries it produced from the resource files' own mtimes, so those vary with
+  # when the checkout happened; two builds of the same commit in two directories disagreed until
+  # every entry was pinned. Nothing is signed yet here, so rewriting the stamps is safe.
+  foreach ($entry in $zip.Entries) { $entry.LastWriteTime = $stamp }
 } finally { $zip.Dispose() }
 
 # 5. align before signing, or apksigner's output would have to be re-aligned and invalidate the seal

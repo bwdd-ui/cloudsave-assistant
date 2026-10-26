@@ -24,15 +24,17 @@ const HOST_PROVIDED = {
   crypto: 'CsShims.crypto',
 };
 
+const converted = [];
+
 function read(name) {
   const file = path.join(SOURCE_DIR, name);
   if (!fs.existsSync(file)) throw new Error(`缺少源文件 ${file}`);
   const text = fs.readFileSync(file, 'utf8');
-  // 内联是逐字节复制，所以检出方式会直接决定 apk 里的字节。仓库里存的是 LF，
-  // 这里若读到 CRLF，说明这份检出被 core.autocrlf 改写过（.gitattributes 已要求 eol=lf），
-  // 必须停下来让人重新检出，而不是悄悄打出一个和别人算不出同一个哈希的包。
-  if (text.includes('\r')) throw new Error(`${name}: 源文件带 CRLF 换行，打出的 apk 会随检出方式变化。请重新检出（git checkout -- .），别用 autocrlf 改写过的工作副本打包。`);
-  return text;
+  // 内联是逐字节复制，所以检出方式会直接决定 apk 里的字节：Windows 上 core.autocrlf=true
+  // 在检出时把 LF 改成 CRLF，同一份提交就能打出两个不同的包（实测差 367 字节）。
+  // 仓库里存的就是 LF，这里归一回提交里的样子——包内字节等于提交，而不是等于「这次是怎么检出的」。
+  if (text.includes('\r')) converted.push(name);
+  return text.replace(/\r\n/g, '\n');
 }
 
 // 模块内部写的是 require('./share115-verify')，带点且可能省扩展名，打包期统一解析成清单里的名字。
@@ -98,6 +100,8 @@ if (require.main === module) {
   fs.mkdirSync(path.dirname(OUTPUT), { recursive: true });
   fs.writeFileSync(OUTPUT, output);
   console.log(`打包 ${MODULES.length} 个模块 → ${path.relative(process.cwd(), OUTPUT)}（${Buffer.byteLength(output)} 字节）`);
+  // 归一换行不是免费的事：让人知道这份检出被 autocrlf 动过，顺手提醒 .gitattributes 已经在兜住它。
+  if (converted.length) console.log(`已把 ${converted.length} 个源文件的 CRLF 归一回仓库里的 LF：${converted.join(', ')}`);
 }
 
-module.exports = { build, MODULES, HOST_PROVIDED, OUTPUT, SOURCE_DIR };
+module.exports = { build, MODULES, HOST_PROVIDED, OUTPUT, SOURCE_DIR, convertedSources: () => converted.slice() };
