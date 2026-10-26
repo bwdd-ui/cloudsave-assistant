@@ -19,11 +19,19 @@ while(queue.length){
   }
 }
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-for(const match of html.matchAll(/<script[^>]+src="([^"]+\.js)"/g)){
+const scripts=[...html.matchAll(/<script[^>]+src="([^"]+\.js)"/g)];
+for(const match of scripts){
   const file=match[1].replace(/^\.\//,'');
   assert(fs.existsSync(path.join(root,file)),`index.html 加载 ${file}，但文件不存在`);
   assert(set.has(file),`index.html 加载 ${file}，却没有写进 build.files`);
 }
+const styles=[...html.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+\.css)"/g)];
+assert(styles.length>=2,'界面至少引用了主题与润色两张样式表');
+for(const match of styles){
+  const file=match[1].replace(/^\.\//,'');
+  assert(fs.existsSync(path.join(root,file)),`index.html 引用 ${file}，但文件不存在`);
+  assert(set.has(file),`index.html 引用 ${file}，却没有写进 build.files，打包后界面会失去样式`);
+}
 assert(set.has('ipc-guard.js')&&set.has('quit-wait.js'),'新增的安全模块必须随包发布');
 assert(seen.has('ipc-guard.js')&&seen.has('quit-wait.js'));
-console.log(`PASS the ${seen.size} modules reachable from main.js and the ${[...html.matchAll(/<script[^>]+src="([^"]+\.js)"/g)].length} scripts of index.html are all present and listed in build.files`);
+console.log(`PASS the ${seen.size} modules reachable from main.js, the ${scripts.length} scripts and the ${styles.length} stylesheets of index.html are all present and listed in build.files`);

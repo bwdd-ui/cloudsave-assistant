@@ -60,6 +60,8 @@
       "remote-page.js",
       "site-detail-renderer.js",
       "ui-polish.css",
+      "mobile.css",
+      "mobile-layout.js",
       "browse-cache.js",
       "background-window.js",
       "navigation-settings.js",

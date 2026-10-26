@@ -1,0 +1,51 @@
+diff --git a/.github/workflows/docker-amd64.yml b/.github/workflows/docker-amd64.yml
+index d96badb..d0f0334 100644
+--- a/.github/workflows/docker-amd64.yml
++++ b/.github/workflows/docker-amd64.yml
+@@ -51,15 +51,33 @@ jobs:
+           sudo cat smoke-data/docker-smoke.png > release/docker-ui.png
+           docker stop -t 90 cloudsave-smoke
+           docker logs cloudsave-smoke > release/container-smoke.log 2>&1
++      - name: Phone profile container test
++        run: |
++          mkdir -p mobile-data
++          docker run -d --name cloudsave-mobile --shm-size=1g \
++            -e CLOUDSAVE_SMOKE_TEST=1 -e WEB_AUTHENTICATION_USERNAME=ci \
++            -e WEB_AUTHENTICATION_PASSWORD=ephemeral-test-only \
++            -e DISPLAY_WIDTH=420 -e DISPLAY_HEIGHT=900 -e CLOUDSAVE_MOBILE_LAYOUT=1 \
++            -v "$PWD/mobile-data:/config" "$IMAGE"
++          for i in $(seq 1 90); do
++            test -f mobile-data/docker-smoke.json && break
++            test "$(docker inspect cloudsave-mobile --format '{{.State.Running}}')" = true || { docker logs cloudsave-mobile; exit 1; }
++            sleep 2
++          done
++          sudo cat mobile-data/docker-smoke.json > release/mobile-smoke.json
++          cat release/mobile-smoke.json
++          node -e "const r=require('./release/mobile-smoke.json');if(!r.ok||!r.mobileLayout||r.windowSize[0]>560)process.exit(1)"
++          docker stop -t 90 cloudsave-mobile
++          docker rm cloudsave-mobile
+       - name: Save installable image and source
+         run: |
+           docker save "$IMAGE" | gzip -1 > release/CloudSave-Docker-amd64-1.2.1.tar.gz
+           docker image inspect "$IMAGE" --format '{{json .}}' > release/image-metadata.json
+-          cp docker/compose.yaml docker/.env.example docker/README.md release/
++          cp docker/compose.yaml docker/.env.example docker/README.md docker/MOBILE.md release/
+           git archive --format=zip --prefix=cloudsave-assistant/ -o release/CloudSave-Docker-Source-1.2.1.zip HEAD
+           cd release
+           sha256sum CloudSave-Docker-amd64-1.2.1.tar.gz CloudSave-Docker-Source-1.2.1.zip > SHA256SUMS.txt
+-          tar czf CloudSave-Docker-Deploy-1.2.1.tar.gz compose.yaml .env.example README.md
++          tar czf CloudSave-Docker-Deploy-1.2.1.tar.gz compose.yaml .env.example README.md MOBILE.md
+       - name: Publish release
+         env:
+           GH_TOKEN: ${{ github.token }}
+@@ -71,7 +89,9 @@ jobs:
+             release/SHA256SUMS.txt release/docker-ui.png release/first-start.json release/restart-test.json release/image-metadata.json
+       - name: Logs on failure
+         if: failure()
+-        run: docker logs cloudsave-smoke || true
++        run: |
++          docker logs cloudsave-smoke || true
++          docker logs cloudsave-mobile || true
+       - uses: actions/upload-artifact@v4
+         if: always()
+         with:
