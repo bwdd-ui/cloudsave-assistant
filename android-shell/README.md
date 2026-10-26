@@ -31,7 +31,8 @@ cd android-shell
 .\build.ps1 -Release -KeystorePass (Get-Content cloudsave-shell-release.password -Raw).Trim()
 ```
 
-产物在 `build/CloudSave-Shell-1.0.apk`。默认 SDK 路径 `C:\Android-sdk`，可以用 `-Sdk D:\other-sdk` 覆盖。
+产物在 `build/CloudSave-Shell-<versionName>.apk`（文件名里的版本从 `AndroidManifest.xml` 读，不会和包内版本对不上）。
+默认 SDK 路径 `C:\Android-sdk`，可以用 `-Sdk D:\other-sdk` 覆盖。
 脚本会自动选 `build-tools` 和 `platforms` 下版本号最大的目录。
 
 在 Linux/macOS 上等价命令（PowerShell 脚本本身没做跨平台版本，因为构建机就是 Windows）：
@@ -48,6 +49,10 @@ javac -parameters --release 11 -encoding UTF-8 -classpath "$JAR" -d build/classe
 **`-parameters` 不能去掉**：JDK 21 给内部类合成构造参数 `this$0` 写了一个名字为 null 的 `MethodParameters`
 条目，build-tools 34.0.0 里的 d8 读到它会直接 `NullPointerException`（每个捕获外部实例的内部类都炸）。
 加上 `-parameters` 之后名字非空，dex 步骤才通过。这是我在本机踩到的唯一构建阻塞点。
+
+## 版本
+
+- `1.0`（versionCode 1，已撤回）：真机首次启动即闪退。错误面板的容器被建成 `LinearLayout`，却又按 `FrameLayout` 强转去 `addView`，`onCreate` 第一帧就 `ClassCastException`。`1.0.1` 修掉它，并把 `panel`/`menuButton` 两个字段改成具体视图类型，让这类父子类型不匹配在编译期就暴露；同时 `onDestroy` 里先 `stopLoading()` 再 `destroy()`，避免某些 OEM WebView 在加载中销毁时连带崩掉进程。
 
 ## 安装
 
@@ -81,7 +86,7 @@ javac -parameters --release 11 -encoding UTF-8 -classpath "$JAR" -d build/classe
 
 已验证（离线，不需要设备）：
 
-- `aapt2 dump badging`：包名 `ui.bwdd.cloudsave.shell`、versionCode 1 / versionName 1.0、
+- `aapt2 dump badging`：包名 `ui.bwdd.cloudsave.shell`、versionCode 2 / versionName 1.0.1、
   sdkVersion 21、targetSdkVersion 34、`android.permission.INTERNET`、label「云存助手」、
   五种 density 的 launcher icon 都能解析、可启动 Activity 是 `.MainActivity`。
 - `apksigner verify --print-certs`：签名者 `CN=CloudSave Shell, OU=NAS, O=bwdd-ui, C=CN`，

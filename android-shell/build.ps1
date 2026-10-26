@@ -17,7 +17,10 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $build = Join-Path $root 'build'
-$version = '1.0'
+# The artifact name follows the manifest so a version bump cannot leave a misleading filename behind.
+$version = [regex]::Match((Get-Content (Join-Path $root 'AndroidManifest.xml') -Raw),
+  'android:versionName="([^"]+)"').Groups[1].Value
+if (-not $version) { throw 'AndroidManifest.xml has no android:versionName' }
 
 function Checked($what) {
   if ($LASTEXITCODE -ne 0) { throw "$what failed with exit code $LASTEXITCODE" }

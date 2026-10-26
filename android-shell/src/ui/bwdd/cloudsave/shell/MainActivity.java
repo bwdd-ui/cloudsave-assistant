@@ -17,6 +17,7 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
@@ -52,8 +53,8 @@ public class MainActivity extends Activity {
       Gravity.BOTTOM | Gravity.END, Gravity.BOTTOM | Gravity.START};
 
   private WebView web;
-  private View menuButton;
-  private View panel;
+  private TextView menuButton;
+  private FrameLayout panel;
   private TextView panelTitle;
   private TextView panelDetail;
   private TextView panelAddress;
@@ -180,9 +181,11 @@ public class MainActivity extends Activity {
     progress.setVisibility(View.GONE);
     root.addView(progress, pp);
 
-    panel = new LinearLayout(this);
+    panel = new FrameLayout(this);
+    panel.setBackgroundColor(0xf0101014);
     LinearLayout column = new LinearLayout(this);
     column.setOrientation(LinearLayout.VERTICAL);
+    column.setGravity(Gravity.CENTER);
     column.setPadding(dp(22), dp(22), dp(22), dp(22));
     panelTitle = new TextView(this);
     panelTitle.setTextSize(18f);
@@ -227,18 +230,16 @@ public class MainActivity extends Activity {
 
     FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
-    panel.setBackgroundColor(0xf0101014);
-    column.setGravity(Gravity.CENTER);
-    ((FrameLayout) panel).addView(column, sp);
+    panel.addView(column, sp);
     panel.setVisibility(View.GONE);
     root.addView(panel, new FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
     menuButton = new TextView(this);
-    ((TextView) menuButton).setText("⋮");
-    ((TextView) menuButton).setTextSize(22f);
-    ((TextView) menuButton).setGravity(Gravity.CENTER);
-    ((TextView) menuButton).setTextColor(Color.WHITE);
+    menuButton.setText("⋮");
+    menuButton.setTextSize(22f);
+    menuButton.setGravity(Gravity.CENTER);
+    menuButton.setTextColor(Color.WHITE);
     menuButton.setBackground(new ColorDrawable(0x66000000));
     FrameLayout.LayoutParams mp = new FrameLayout.LayoutParams(dp(40), dp(40));
     mp.gravity = CORNERS[0];
@@ -448,7 +449,7 @@ public class MainActivity extends Activity {
 
   private void showAbout() {
     new AlertDialog.Builder(this)
-        .setTitle("云存助手 手机外壳 1.0")
+        .setTitle("云存助手 手机外壳 1.0.1")
         .setMessage("这个应用只是一个全屏 WebView，画面来自 NAS 上运行的云存助手容器"
             + "（Docker 里的 KasmVNC 网页端）。\n\n容器必须开着，转存任务也都在容器里执行。"
             + "手机竖屏体验需要把容器虚拟显示改成 420x900 并设置 CLOUDSAVE_MOBILE_LAYOUT=1，"
@@ -542,7 +543,12 @@ public class MainActivity extends Activity {
     }
     CookieManager.getInstance().flush();
     if (web != null) {
-      ((FrameLayout) web.getParent()).removeView(web);
+      // destroy() with a load still in flight takes the WebView process down on some
+      // OEM builds, and getParent() is null when onCreate itself threw.
+      web.stopLoading();
+      if (web.getParent() instanceof ViewGroup) {
+        ((ViewGroup) web.getParent()).removeView(web);
+      }
       web.destroy();
     }
     super.onDestroy();
