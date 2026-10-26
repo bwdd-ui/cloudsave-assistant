@@ -153,12 +153,17 @@ function Entry-Names($path) {
 $names = Entry-Names $out
 $slashed = @($names | Where-Object { $_.Contains([char]0x5C) })
 if ($slashed.Count) { throw ('zip entry names contain a backslash, Android cannot load them: ' + ($slashed -join ', ')) }
-foreach ($required in @('AndroidManifest.xml', 'resources.arsc', 'classes.dex',
-    'assets/www/index.html', 'assets/www/app.css', 'assets/www/host.js', 'assets/www/app.js',
-    'assets/www/cloudsave-modules.js')) {
+# Which assets the page actually loads is decided by index.html, not by a list kept here:
+# adding shell.js or library.js to the page must not need a matching edit in this script.
+$html = Get-Content -Raw (Join-Path $root 'assets\www\index.html')
+$referenced = @([regex]::Matches($html, '(?:src|href)="(?!https?:|data:|#)([^"]+)"') |
+  ForEach-Object { 'assets/www/' + $_.Groups[1].Value })
+if (-not $referenced.Count) { throw 'index.html references no packaged asset - this gate stopped checking anything' }
+foreach ($required in (@('AndroidManifest.xml', 'resources.arsc', 'classes.dex') + $referenced)) {
   if (-not ($names -ccontains $required)) { throw "the signed apk is missing $required" }
 }
-Write-Host ("entry names verified byte-wise: {0} entries, all using /" -f $names.Count)
+Write-Host ("entry names verified byte-wise: {0} entries, all using /; page loads {1} assets: {2}" -f
+  $names.Count, $referenced.Count, (($referenced | Sort-Object) -join ' '))
 
 # 8. report
 & (Join-Path $bt 'apksigner.bat') verify --print-certs $out
