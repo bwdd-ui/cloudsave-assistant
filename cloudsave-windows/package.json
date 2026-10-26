@@ -40,6 +40,8 @@
       "json-writer.js",
       "quit-wait.js",
       "ipc-guard.js",
+      "snapshot-store.js",
+      "monitor-log-files.js",
       "resource-archive.js",
       "guanying-provider.js",
       "guanying-monitor.js",

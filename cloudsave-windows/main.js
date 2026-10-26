@@ -147,7 +147,7 @@ async function scanLocalCloudFallbacks(website,filters,assertActive,onCandidates
     const detail=await fetchMovieDetail(movie.id);assertActive();
     if(movie.mode==='tv')await inspectTelevisionFiles(movie,detail,filters,assertActive);
     const candidates=selectMonitorCandidates(movie.mode,movie,detail,filters).candidates;
-    cloudFallbackChecked.set(retryKey,retryStamp);
+    cloudFallbackChecked.set(retryKey,retryStamp);while(cloudFallbackChecked.size>20000)cloudFallbackChecked.delete(cloudFallbackChecked.keys().next().value);
     if(await onCandidates(candidates,false))break;
   }
 }
@@ -421,7 +421,7 @@ function appendMonitorLog(message, level = 'info', details = '', website = 'buta
   const config = readConfig();
   const state = monitorConfig(config);
   const logs = [...state.logs, entry].slice(-500);
-  try { if(typeof fs.appendFileSync==='function'){const file=monitorLogFile();fs.mkdirSync(path.dirname(file),{recursive:true});fs.appendFileSync(file,JSON.stringify(entry)+'\n','utf8');} } catch(error) { entry.details+=`\n完整日志写入失败：${error.message}`; }
+  try { if(typeof fs.appendFileSync==='function'){const file=monitorLogFile();fs.mkdirSync(path.dirname(file),{recursive:true});fs.appendFileSync(file,JSON.stringify(entry)+'\n','utf8');try{require('./monitor-log-files').retention(fs,file);}catch{ /* 清理是附带工作，失败不影响本条日志 */ }} } catch(error) { entry.details+=`\n完整日志写入失败：${error.message}`; }
   config.monitor = { ...state, logs }; writeConfig(config);
   pushMonitorStatus({ ...state, logs });
 }
@@ -1622,7 +1622,9 @@ function updateSubmissionPlacement(entry, status, message) {
 }
 function savePendingOffline(entry) {
   const config = readConfig();
-  config.offlinePlacementPending = [...(config.offlinePlacementPending || []).filter(item => !(item.uid === entry.uid && magnetKey(item.url) === magnetKey(entry.url))), entry];
+  // Entries whose 115 task disappeared server-side are re-queued by every repair pass, so the list
+  // needs a ceiling; config.json is rewritten on each append.
+  config.offlinePlacementPending = [...(config.offlinePlacementPending || []).filter(item => !(item.uid === entry.uid && magnetKey(item.url) === magnetKey(entry.url))), entry].slice(-1000);
   writeConfig(config);
 }
 function removePendingOffline(entry) {
@@ -1907,7 +1909,7 @@ function repairCachedOfflinePlacements(){
     const config=readConfig(),resolved=config.offlinePlacementResolved||{},queue=(config.offlinePlacementPending||[]).filter(x=>!resolved[x.uid+'|'+magnetKey(x.url)]),known=new Set(queue.map(x=>x.uid+'|'+magnetKey(x.url)));
     // Recover locally recorded submissions from versions that did not enqueue directory verification.
     for(const row of resourceDatabase().history){const key=row.uid+'|'+magnetKey(row.url);if(row.uid!==uid||row.status!=='pending'||!/^\d+$/.test(row.cid)||row.cid==='0'||known.has(key)||resolved[key])continue;queue.push({id:crypto.randomUUID(),historyId:row.id,url:row.url,uid,cid:row.cid,name:row.folderName||row.cid,taskHash:offlineHash(row.url),createdAt:row.time,nextCheckAt:0});known.add(key);}
-    config.offlinePlacementPending=queue;writeConfig(config);
+    config.offlinePlacementPending=queue.slice(-1000);writeConfig(config);
     const snapshot=new Map(cloudDownloadCache.snapshot(uid).map(x=>[x.key,x])),eligible=queue.filter(x=>x.uid===uid&&(!x.nextCheckAt||x.nextCheckAt<=Date.now()));
     const start=eligible.length?cachedPlacementCursor%eligible.length:0;let directReads=0;
     for(let n=0;n<Math.min(20,eligible.length);n++){
@@ -2201,11 +2203,12 @@ function captureGuanyingMagnets(movie,detail,filters,snapshot,mode){
   }
   snapshot.rows=[...rows.values()];writeResourceDatabase(database);
 }
+const snapshotStore = require('./snapshot-store');
 const guanyingMonitor=new (require('./guanying-monitor').GuanyingMonitor)({
   readConfig,writeConfig,provider:getGuanyingProvider,uid:()=>readConfig().monitorAccountUid || '',sessionStamp:()=>readConfig().guanyingSession?.savedAt || '',cookie:loadCookie,account:getAccount,bindAccount:bindMonitorAccount,syncDownloads:syncCloudDownloads,scanFallbacks:(filters,active,onCandidates,categories)=>scanLocalCloudFallbacks('guanying',filters,active,onCandidates,categories),validateFolder:validateSaveFolder,folder:defaultSaveFolder,shuttingDown:()=>shuttingDown,
   select:selectMonitorCandidates,inspectFiles:inspectTelevisionFiles,seen:monitorSeenKeys,submit:submitMagnet,remember:saveMonitorMovieBest,capture:captureGuanyingMagnets,
-  readSnapshot:()=>{if(!fs.existsSync(GUANYING_EXPORT_FILE()))return {signature:'',rows:[],complete:false};return JSON.parse(fs.readFileSync(GUANYING_EXPORT_FILE(),'utf8'));},
-  writeSnapshot:value=>{if(jsonStore)jsonStore.set(GUANYING_EXPORT_FILE(),value);else{fs.writeFileSync(GUANYING_EXPORT_FILE()+'.tmp',JSON.stringify(value));fs.renameSync(GUANYING_EXPORT_FILE()+'.tmp',GUANYING_EXPORT_FILE());}},
+  readSnapshot:()=>snapshotStore.readSnapshot(fs,GUANYING_EXPORT_FILE(),message=>appendMonitorLog('观影扫描结果不可用，本轮按空结果重新扫描','warning',message,'guanying')),
+  writeSnapshot:value=>{if(jsonStore)jsonStore.set(GUANYING_EXPORT_FILE(),value);else snapshotStore.writeSnapshot(fs,GUANYING_EXPORT_FILE(),value);},
   log:(message,level='info',details='')=>appendMonitorLog(message,level,details,'guanying'),publish:state=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('guanying-monitor-status',state);}
 });
 ipcMain.handle('guanying-monitor-state',()=>guanyingMonitor.state());
@@ -2239,8 +2242,8 @@ const btbtlaMonitor=new (require('./guanying-monitor').GuanyingMonitor)({
   provider:getBtbtlaProvider,uid:()=>readConfig().monitorAccountUid || '',sessionStamp:()=>'',cookie:loadCookie,account:getAccount,bindAccount:bindMonitorAccount,syncDownloads:syncCloudDownloads,
   scanFallbacks:(filters,active,submit,categories)=>scanLocalCloudFallbacks('btbtla',filters,active,submit,categories),validateFolder:validateSaveFolder,folder:defaultSaveFolder,shuttingDown:()=>shuttingDown,
   select:selectMonitorCandidates,inspectFiles:inspectTelevisionFiles,seen:monitorSeenKeys,submit:submitMagnet,remember:saveMonitorMovieBest,capture:captureGuanyingMagnets,
-  readSnapshot:()=>{if(!fs.existsSync(BTBTLA_EXPORT_FILE()))return {signature:'',rows:[],complete:false};return JSON.parse(fs.readFileSync(BTBTLA_EXPORT_FILE(),'utf8'));},
-  writeSnapshot:value=>{if(jsonStore)jsonStore.set(BTBTLA_EXPORT_FILE(),value);else fs.writeFileSync(BTBTLA_EXPORT_FILE(),JSON.stringify(value));},
+  readSnapshot:()=>snapshotStore.readSnapshot(fs,BTBTLA_EXPORT_FILE(),message=>appendMonitorLog('BT影视扫描结果不可用，本轮按空结果重新扫描','warning',message,'btbtla')),
+  writeSnapshot:value=>{if(jsonStore)jsonStore.set(BTBTLA_EXPORT_FILE(),value);else snapshotStore.writeSnapshot(fs,BTBTLA_EXPORT_FILE(),value);},
   log:(m,l='info',d='')=>appendMonitorLog(m,l,d,'btbtla'),publish:state=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('btbtla-monitor-status',state);}
 });
 ipcMain.handle('btbtla-catalog',(_e,category,page,filters)=>browseCache.get('btbtla',[category,Number(page)||1,filters || {}],()=>getBtbtlaProvider().catalog(category,Number(page)||1,filters)));
@@ -2276,7 +2279,7 @@ function getQmp4Provider(){return qmp4Provider ||=new (require('./qmp4-provider'
 const qmp4Monitor=new (require('./guanying-monitor').GuanyingMonitor)({website:'qmp4',label:'七味',namespace:'qm5:',categories:['mv','tv','ac','variety','short'],mode:category=>category==='mv'?'movie':'tv',nativeOptions:options=>options,
   filters:options=>require('./guanying-monitor').legacyFilters(options),catalogPath:require('./qmp4-provider').catalogPath,
   readConfig:()=>{const c=readConfig();return {...c,guanyingMonitor:c.qmp4Monitor,guanyingScan:c.qmp4Scan};},writeConfig:value=>{const c=readConfig();c.qmp4Monitor=value.guanyingMonitor;if(value.guanyingScan)c.qmp4Scan=value.guanyingScan;else delete c.qmp4Scan;writeConfig(c);},provider:getQmp4Provider,uid:()=>readConfig().monitorAccountUid || '',sessionStamp:()=>'',cookie:loadCookie,account:getAccount,bindAccount:bindMonitorAccount,syncDownloads:syncCloudDownloads,scanFallbacks:(f,a,s,c)=>scanLocalCloudFallbacks('qmp4',f,a,s,c),validateFolder:validateSaveFolder,folder:defaultSaveFolder,shuttingDown:()=>shuttingDown,select:selectMonitorCandidates,inspectFiles:inspectTelevisionFiles,seen:monitorSeenKeys,submit:submitMagnet,remember:saveMonitorMovieBest,capture:captureGuanyingMagnets,
-  readSnapshot:()=>fs.existsSync(QMP4_EXPORT_FILE())?JSON.parse(fs.readFileSync(QMP4_EXPORT_FILE(),'utf8')):{signature:'',rows:[],complete:false},writeSnapshot:value=>{if(jsonStore)jsonStore.set(QMP4_EXPORT_FILE(),value);else fs.writeFileSync(QMP4_EXPORT_FILE(),JSON.stringify(value));},log:(m,l='info',d='')=>appendMonitorLog(m,l,d,'qmp4'),publish:state=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('qmp4-monitor-status',state);}
+  readSnapshot:()=>snapshotStore.readSnapshot(fs,QMP4_EXPORT_FILE(),message=>appendMonitorLog('七味扫描结果不可用，本轮按空结果重新扫描','warning',message,'qmp4')),writeSnapshot:value=>{if(jsonStore)jsonStore.set(QMP4_EXPORT_FILE(),value);else snapshotStore.writeSnapshot(fs,QMP4_EXPORT_FILE(),value);},log:(m,l='info',d='')=>appendMonitorLog(m,l,d,'qmp4'),publish:state=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('qmp4-monitor-status',state);}
 });
 ipcMain.handle('qmp4-catalog',(_e,category,page,filters)=>browseCache.get('qmp4',[category,Number(page)||1,filters || {}],()=>getQmp4Provider().catalog(category,Number(page)||1,filters)));
 ipcMain.handle('qmp4-detail',async(_e,id,fresh)=>{const raw=await getQmp4Provider().detail(id,{fresh});return {...normalizeCloudDetail(raw),resourceAccessRequired:raw.resourceAccessRequired,resourceMessage:raw.resourceMessage,unavailableResourceCount:raw.unavailableResourceCount};});
@@ -2285,7 +2288,7 @@ ipcMain.handle('qmp4-export',async()=>{if(qmp4ExportRunning)throw Error('七味�
 const jyingMonitor=new (require('./guanying-monitor').GuanyingMonitor)({website:'jying',label:'聚影',namespace:'jy4:',categories:['mv','tv','ac','doc','variety','bundle','other'],mode:category=>['mv','doc','bundle','other'].includes(category)?'movie':'tv',nativeOptions:options=>({...options,res:options.onlyCloud?'115':options.res || 'MagnetLink'}),
   filters:async options=>{const f=require('./guanying-monitor').legacyFilters(options);f.genres=[];f.tags=[];if(options.genre||options.tag){const choices=await getJyingProvider().filters();if(options.genre){const x=choices.genre.find(x=>x.value===options.genre);if(!x)throw Object.assign(Error('聚影类型筛选已变更，请重新选择'),{filterRejected:true});f.genres=[x.label];}if(options.tag){const x=choices.tag.find(x=>x.value===options.tag);if(!x)throw Object.assign(Error('聚影标签筛选已变更，请重新选择'),{filterRejected:true});f.tags=[x.label];}}return f;},catalogPath:(category,page,options)=>'/api/app/movies/?'+new URLSearchParams(require('./jying-provider').catalogParams(category,page,options)),
   readConfig:()=>{const c=readConfig();return {...c,guanyingMonitor:c.jyingMonitor,guanyingScan:c.jyingScan};},writeConfig:value=>{const c=readConfig();c.jyingMonitor=value.guanyingMonitor;if(value.guanyingScan)c.jyingScan=value.guanyingScan;else delete c.jyingScan;writeConfig(c);},provider:getJyingProvider,uid:()=>readConfig().monitorAccountUid || '',sessionStamp:()=>readConfig().jyingSession?.savedAt || '',cookie:loadCookie,account:getAccount,bindAccount:bindMonitorAccount,syncDownloads:syncCloudDownloads,scanFallbacks:(f,a,s,c)=>scanLocalCloudFallbacks('jying',f,a,s,c),validateFolder:validateSaveFolder,folder:defaultSaveFolder,shuttingDown:()=>shuttingDown,select:selectMonitorCandidates,inspectFiles:inspectTelevisionFiles,seen:monitorSeenKeys,submit:submitMagnet,remember:saveMonitorMovieBest,capture:captureGuanyingMagnets,
-  readSnapshot:()=>fs.existsSync(JYING_EXPORT_FILE())?JSON.parse(fs.readFileSync(JYING_EXPORT_FILE(),'utf8')):{signature:'',rows:[],complete:false},writeSnapshot:value=>{if(jsonStore)jsonStore.set(JYING_EXPORT_FILE(),value);else fs.writeFileSync(JYING_EXPORT_FILE(),JSON.stringify(value));},log:(m,l='info',d='')=>appendMonitorLog(m,l,d,'jying'),publish:state=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('jying-monitor-status',state);}
+  readSnapshot:()=>snapshotStore.readSnapshot(fs,JYING_EXPORT_FILE(),message=>appendMonitorLog('聚影扫描结果不可用，本轮按空结果重新扫描','warning',message,'jying')),writeSnapshot:value=>{if(jsonStore)jsonStore.set(JYING_EXPORT_FILE(),value);else snapshotStore.writeSnapshot(fs,JYING_EXPORT_FILE(),value);},log:(m,l='info',d='')=>appendMonitorLog(m,l,d,'jying'),publish:state=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('jying-monitor-status',state);}
 });
 ipcMain.handle('jying-catalog',(_e,category,page,filters)=>browseCache.get('jying',[category,Number(page)||1,filters || {}],()=>getJyingProvider().catalog(category,Number(page)||1,filters)));
 ipcMain.handle('jying-detail',async(_e,id,fresh)=>{const raw=await getJyingProvider().detail(id,{fresh,allowLocked:true});return {...normalizeCloudDetail(raw),resourceAccessRequired:raw.resourceAccessRequired,resourceMessage:raw.resourceMessage,unavailableResourceCount:raw.unavailableResourceCount};});

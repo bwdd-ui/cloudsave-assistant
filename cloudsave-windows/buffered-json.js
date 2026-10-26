@@ -69,8 +69,13 @@ class BufferedJson {
     const promise = new Promise((resolve, reject) => this.waiters.push({ resolve, reject })); this.send(); return promise;
   }
   async close() {
-    // Flush callbacks may enqueue a newer snapshot before this continuation runs.
-    do { await this.flush(); } while (this.pending.size || this.busy);
+    // Flush callbacks may enqueue a newer snapshot before this continuation runs, so drain until
+    // quiet; the attempt ceiling keeps a callback that always re-enqueues from holding exit open.
+    for (let attempt = 0; ; attempt++) {
+      await this.flush();
+      if (!this.pending.size && !this.busy) break;
+      if (attempt >= 20) throw new Error(`仍有 ${this.pending.size + (this.busy ? 1 : 0)} 项数据待保存，已保留供重试`);
+    }
     this.closed = true; if (this.timer) clearTimeout(this.timer); this.timer = null; if (this.worker) await this.worker.terminate(); }
 }
 module.exports = { BufferedJson };
