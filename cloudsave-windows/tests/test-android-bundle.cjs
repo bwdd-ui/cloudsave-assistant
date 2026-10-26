@@ -297,7 +297,10 @@ function sandbox(options = {}) {
     fs.copyFileSync(path.join(app, 'tools', 'bundle.cjs'), path.join(tools, 'bundle.cjs'));
     fs.mkdirSync(path.join(scratch, 'cloudsave-windows'), { recursive: true });
     for (const name of bundle.MODULES)
-      fs.writeFileSync(path.join(scratch, 'cloudsave-windows', name), read(path.join(repo, name)).replace(/\n/g, '\r\n'));
+      // 先归一再改坏：这份检出本身可能已经是 CRLF，直接 replace 会写成 CR CR LF，
+      // 那就不是在模拟「autocrlf 的检出」，而是在造一种 git 造不出来的文件。
+      fs.writeFileSync(path.join(scratch, 'cloudsave-windows', name),
+        read(path.join(repo, name)).replace(/\r\n/g, '\n').replace(/\n/g, '\r\n'));
     const report = execFileSync(process.execPath, [path.join(tools, 'bundle.cjs')], { cwd: scratch, encoding: 'utf8' });
     assert.match(report, /CRLF 归一/, 'CRLF 检出没走归一这条路，测试没测到东西');
     assert.equal(read(path.join(scratch, 'android-app', 'assets', 'www', 'cloudsave-modules.js')), code,

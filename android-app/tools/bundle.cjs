@@ -24,7 +24,7 @@ const HOST_PROVIDED = {
   crypto: 'CsShims.crypto',
 };
 
-const converted = [];
+const converted = new Set(); // 每个模块会被读两次（取依赖表、取正文），别把名字报两遍
 
 function read(name) {
   const file = path.join(SOURCE_DIR, name);
@@ -33,7 +33,7 @@ function read(name) {
   // 内联是逐字节复制，所以检出方式会直接决定 apk 里的字节：Windows 上 core.autocrlf=true
   // 在检出时把 LF 改成 CRLF，同一份提交就能打出两个不同的包（实测差 367 字节）。
   // 仓库里存的就是 LF，这里归一回提交里的样子——包内字节等于提交，而不是等于「这次是怎么检出的」。
-  if (text.includes('\r')) converted.push(name);
+  if (text.includes('\r')) converted.add(name);
   return text.replace(/\r\n/g, '\n');
 }
 
@@ -101,7 +101,7 @@ if (require.main === module) {
   fs.writeFileSync(OUTPUT, output);
   console.log(`打包 ${MODULES.length} 个模块 → ${path.relative(process.cwd(), OUTPUT)}（${Buffer.byteLength(output)} 字节）`);
   // 归一换行不是免费的事：让人知道这份检出被 autocrlf 动过，顺手提醒 .gitattributes 已经在兜住它。
-  if (converted.length) console.log(`已把 ${converted.length} 个源文件的 CRLF 归一回仓库里的 LF：${converted.join(', ')}`);
+  if (converted.size) console.log(`已把 ${converted.size} 个源文件的 CRLF 归一回仓库里的 LF：${[...converted].join(', ')}`);
 }
 
-module.exports = { build, MODULES, HOST_PROVIDED, OUTPUT, SOURCE_DIR, convertedSources: () => converted.slice() };
+module.exports = { build, MODULES, HOST_PROVIDED, OUTPUT, SOURCE_DIR, convertedSources: () => [...converted] };
