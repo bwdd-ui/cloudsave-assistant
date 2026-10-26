@@ -31,7 +31,7 @@ src/.../SecretStore.java                   AndroidKeyStore AES-256-GCM 存 Cooki
 src/.../NativeBridge.java                  @JavascriptInterface 的 8 个入口
 src/.../AppLog.java                        logcat + filesDir/cloudsave-phone.log
 tools/bundle.cjs                           把 cloudsave-windows 的模块内联成一份可求值的 JS
-build.ps1                                  node bundle → aapt2 → javac → d8 → zipalign → apksigner
+build.ps1                                  node bundle → aapt2 → javac → d8 → 手工写入 dex 与 assets → zipalign → apksigner → 条目名门禁
 res/mipmap-*/ic_launcher.png               与套壳版同一套图标
 ```
 
@@ -59,10 +59,11 @@ cd android-app
 产物 `build/CloudSave-Standalone-<versionName>.apk`（文件名里的版本从 `AndroidManifest.xml` 读，不会和包内版本对不上）。
 默认 SDK 路径 `C:\Android-sdk`，用 `-Sdk D:\other-sdk` 覆盖；脚本自动取 `build-tools`/`platforms` 下版本号最大的目录。
 
-两个必须保留的构建细节：
+三个必须保留的构建细节：
 
 - **`javac -parameters` 不能去掉**：JDK 21 会给内部类合成的 `this$0` 写一个名字为 null 的 `MethodParameters` 条目，build-tools 34.0.0 的 d8 读到就 `NullPointerException`。
 - **`build.ps1` 只能写 ASCII**：Windows PowerShell 5.1 对无 BOM 的 `.ps1` 按本机代码页解码，中文注释会把脚本读碎。界面文案在 `assets/` 和 `res/values/strings.xml` 里，那些是 UTF-8 数据，不受影响。
+- **assets 不能用 `aapt2 link -A`**：Windows 上的 aapt2 会把目录条目写成 `assets/www\index.html`（前缀用 `/`、相对段用 `\`），Android 的 `AssetManager` 认不出来，WebView 起手就是 `net::ERR_FILE_NOT_FOUND`。所以 `build.ps1` 里 `aapt2 link` 不带 `-A`，assets 由 step 4 逐个用正斜杠名字写进 zip，step 7 再按字节读一遍中央目录做门禁：任何条目名里有 `\`、或者缺必需条目，构建直接失败。
 
 签名与对齐的顺序不能反：先 `zipalign -f 4` 再 `apksigner sign`，否则签名会被重排破坏。
 
@@ -100,14 +101,21 @@ SHA-256: 26a90120d2053d6ada0e9fe27ec590bc23a68f33d174164e753c31de4b8fdfb2
 没有（有意留到后面几轮）：定时监控、其它站点、磁力离线、资源库、历史记录与导出、多账户、
 筛选条件（天数/大小/格式）界面——`share115-filters.js` 已经打进包里，只是还没接进手机界面。
 
+## 版本
+
+| 版本 | 情况 |
+| --- | --- |
+| 0.1.0 / versionCode 1 | 首个独立版。**实机装上了、打不开**：首屏 `net::ERR_FILE_NOT_FOUND`，原因是上面第三条构建细节——apk 里 5 个 assets 条目名全是反斜杠。已废弃，别再装。 |
+| 0.1.1 / versionCode 2 | 修掉 assets 条目名，并在构建里加了字节级门禁。**与 0.1.0 同一把签名密钥，直接覆盖安装即可，不用先卸载。** |
+
 ## 验证状态：这台机器上没在真机跑过
 
 我没有任何 Android 设备或模拟器（这台是 OpenStack 虚机，不支持嵌套虚拟化）。以下结论全是离线得到的：
 
 - 发布签名构建通过；`apksigner verify` v1/v2/v3 为 true；`zipalign -c 4` 通过。
-- `aapt2 dump badging`：包名、versionCode 1 / versionName 0.1.0、minSdk 23、targetSdk 34、只有 INTERNET、启动 Activity 正确；应用名在 `resources.arsc` 里确实是 UTF-8 中文。
-- apk 内条目名全部用 `/`，`classes.dex` 里 16 个类齐（两个 Activity 加内部类、桥、密钥库、日志）。
-- 打进 apk 的 5 个 `assets/www/*` 与磁盘上的文件逐字节同哈希。
+- `aapt2 dump badging`：包名、versionCode 2 / versionName 0.1.1、minSdk 23、targetSdk 34、只有 INTERNET、启动 Activity 正确；应用名在 `resources.arsc` 里确实是 UTF-8 中文。
+- apk 条目名按字节读中央目录复核过：16 个条目，一个反斜杠都没有，5 个 `assets/www/*` 与磁盘文件逐字节同哈希。（0.1.0 当时只用了 `unzip -l` 和 Python `zipfile.namelist()` 看，这两个都会在读取时把 `\` 归一成 `/`，所以那句「条目名全部用 `/`」是错的，问题正是在手机上才暴露出来。）
+- `classes.dex` 里 16 个类齐（两个 Activity 加内部类、桥、密钥库、日志）。
 - JS 侧：`test-share115-api.cjs` + `test-android-bundle.cjs`，以及桌面全量 152/152。
 
 **必须由你在手机上实测的**：安装能否成功、首屏能否出来（WebView 版本）、115 登录窗能否读到 Cookie、

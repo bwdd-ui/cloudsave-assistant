@@ -1,6 +1,6 @@
 <#
   Builds CloudSave-Standalone-<version>.apk without Gradle:
-  node bundle -> aapt2 -> javac -> d8 -> zipalign -> apksigner.
+  node bundle -> aapt2 -> javac -> d8 -> zip in assets and dex -> zipalign -> apksigner -> entry gate.
 
   Keep this file ASCII-only: Windows PowerShell 5.1 reads a .ps1 without a BOM as the local
   code page, so Chinese comments here would break parsing on a zh-CN machine.
@@ -51,12 +51,13 @@ New-Item -ItemType Directory -Path (Join-Path $build 'dex') | Out-Null
 Checked 'bundle'
 if (-not (Test-Path (Join-Path $root 'assets\www\cloudsave-modules.js'))) { throw 'bundle.cjs did not emit cloudsave-modules.js' }
 
-# 1. resources and assets
+# 1. resources
 & (Join-Path $bt 'aapt2.exe') compile --dir (Join-Path $root 'res') -o (Join-Path $build 'res.zip')
 Checked 'aapt2 compile'
+# No -A here on purpose: see step 4.
 & (Join-Path $bt 'aapt2.exe') link -o (Join-Path $build 'linked.apk') `
   --manifest (Join-Path $root 'AndroidManifest.xml') -I $androidJar `
-  -A (Join-Path $root 'assets') --auto-add-overlay (Join-Path $build 'res.zip')
+  --auto-add-overlay (Join-Path $build 'res.zip')
 Checked 'aapt2 link'
 
 # 2. java -- language classes come from JDK 11, android.* from android.jar.
@@ -75,7 +76,13 @@ $classes = Get-ChildItem (Join-Path $build 'classes') -Recurse -Filter '*.class'
   --output (Join-Path $build 'dex') $classes
 Checked 'd8'
 
-# 4. classes.dex into the apk at the zip root
+# 4. classes.dex and the local page into the apk, with entry names we control.
+#    aapt2 on Windows writes -A assets using platform separators, producing entries like
+#    "assets/www\index.html". Android's AssetManager then cannot resolve www/index.html, so the phone
+#    shows ERR_FILE_NOT_FOUND for a file that is plainly inside the apk. Worse, both Python's zipfile
+#    and .NET's ZipArchive normalise "\" to "/" when *reading*, so every listing tool hides it; only
+#    the byte-level central-directory check in step 7 catches it. Writing the entries ourselves keeps
+#    the separator fixed at "/".
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $unsigned = Join-Path $build 'standalone-unsigned.apk'
 Copy-Item (Join-Path $build 'linked.apk') $unsigned
@@ -83,6 +90,12 @@ $zip = [System.IO.Compression.ZipFile]::Open($unsigned, 'Update')
 try {
   [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
     $zip, (Join-Path $build 'dex\classes.dex'), 'classes.dex')
+  $assetRoot = (Join-Path $root 'assets')
+  foreach ($file in Get-ChildItem $assetRoot -Recurse -File) {
+    $relative = $file.FullName.Substring($assetRoot.Length).TrimStart('\').Replace('\', '/')
+    [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+      $zip, $file.FullName, "assets/$relative")
+  }
 } finally { $zip.Dispose() }
 
 # 5. align before signing, or apksigner's output would have to be re-aligned and invalidate the seal
@@ -110,7 +123,44 @@ if ($Release) {
   Checked 'apksigner debug sign'
 }
 
-# 7. report
+# 7. gate: read the central directory byte by byte. Every listing helper we might reach for
+#    (unzip, Python zipfile, .NET ZipArchive) rewrites '\' into '/' on read, so a name that Android
+#    cannot resolve looks perfectly fine everywhere except here.
+function Entry-Names($path) {
+  $bytes = [System.IO.File]::ReadAllBytes($path)
+  $eoc = -1
+  for ($i = $bytes.Length - 22; $i -ge 0; $i--) {
+    if ($bytes[$i] -eq 0x50 -and $bytes[$i + 1] -eq 0x4B -and $bytes[$i + 2] -eq 0x05 -and $bytes[$i + 3] -eq 0x06) { $eoc = $i; break }
+  }
+  if ($eoc -lt 0) { throw 'no zip end-of-central-directory record' }
+  $count = [BitConverter]::ToUInt16($bytes, $eoc + 10)
+  $position = [int][BitConverter]::ToUInt32($bytes, $eoc + 16)
+  $names = @()
+  for ($i = 0; $i -lt $count; $i++) {
+    if (-not ($bytes[$position] -eq 0x50 -and $bytes[$position + 1] -eq 0x4B -and
+              $bytes[$position + 2] -eq 0x01 -and $bytes[$position + 3] -eq 0x02)) {
+      throw "central directory entry $i has a bad signature"
+    }
+    $length = [BitConverter]::ToUInt16($bytes, $position + 28)
+    $extra = [BitConverter]::ToUInt16($bytes, $position + 30)
+    $comment = [BitConverter]::ToUInt16($bytes, $position + 32)
+    $names += [System.Text.Encoding]::ASCII.GetString($bytes, $position + 46, $length)
+    $position += 46 + $length + $extra + $comment
+  }
+  return ,$names
+}
+
+$names = Entry-Names $out
+$slashed = @($names | Where-Object { $_.Contains([char]0x5C) })
+if ($slashed.Count) { throw ('zip entry names contain a backslash, Android cannot load them: ' + ($slashed -join ', ')) }
+foreach ($required in @('AndroidManifest.xml', 'resources.arsc', 'classes.dex',
+    'assets/www/index.html', 'assets/www/app.css', 'assets/www/host.js', 'assets/www/app.js',
+    'assets/www/cloudsave-modules.js')) {
+  if (-not ($names -ccontains $required)) { throw "the signed apk is missing $required" }
+}
+Write-Host ("entry names verified byte-wise: {0} entries, all using /" -f $names.Count)
+
+# 8. report
 & (Join-Path $bt 'apksigner.bat') verify --print-certs $out
 Checked 'apksigner verify'
 & (Join-Path $bt 'aapt2.exe') dump badging $out | Select-String -Pattern "^(package|application-label|sdkVersion|targetSdkVersion|launchable-activity|uses-permission)"
