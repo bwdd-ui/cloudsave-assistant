@@ -10,6 +10,7 @@ const applicationVersion = require('./package.json').version;
 const ownsApplicationLock = require('./startup-instance').acquireInstance(app, dialog, applicationVersion);
 if (!ownsApplicationLock) app.exit(0);
 const { filterRows: filterHistoryExportRows } = require('./history-export');
+const share115Api = require('./share115-api.js');
 const jsonStore = persistentRuntime ? new (require('./buffered-json').BufferedJson)(1200) : null;
 let configCache;
 let configCheckedAt = 0;
@@ -351,26 +352,7 @@ function saveSiteSession(token, host = '', cookie = '') {
   return { loggedIn: Boolean(token) };
 }
 
-function normalizeCookie(raw) {
-  let source = String(raw || '').trim().replace(/^cookie\s*:\s*/i, '');
-  if (!source) throw new Error('请粘贴 Cookie');
-  const required = new Set(['UID', 'CID', 'SEID']);
-  const values = new Map();
-  for (const part of source.split(/[;,\r\n]+/)) {
-    const separator = part.indexOf('=');
-    if (separator <= 0) continue;
-    const originalKey = part.slice(0, separator).trim();
-    if (!/^[A-Za-z0-9_.-]+$/.test(originalKey)) continue;
-    const upperKey = originalKey.toUpperCase();
-    const encoded = part.slice(separator + 1).trim();
-    let value = encoded;
-    try { value = decodeURIComponent(encoded.replace(/\+/g, '%2B')); } catch (_) {}
-    value = value.trim();
-    if (value) values.set(upperKey, { key: required.has(upperKey) ? upperKey : originalKey, value });
-  }
-  for (const key of required) if (!values.get(key)?.value) throw new Error(`Cookie 格式不正确，缺少 ${key}，请复制完整 Cookie`);
-  return [...values.values()].map(item => `${item.key}=${item.value}`).join('; ');
-}
+function normalizeCookie(raw) { return share115Api.normalizeCookie(raw); }
 
 function monitorConfig(config = readConfig()) {
   const savedFilters = config.monitor?.filters && typeof config.monitor.filters === 'object' ? config.monitor.filters : {};
@@ -1442,24 +1424,7 @@ async function getSiteCookie(origin = mirrorConfig().current) {
   } catch (_) { return ''; }
 }
 
-function parse115Json(source) {
-  let safe = ''; let index = 0;
-  while (index < source.length) {
-    const char = source[index];
-    if (char === '"') {
-      const start = index++;
-      while (index < source.length) { if (source[index] === '\\') { index += 2; continue; } if (source[index++] === '"') break; }
-      safe += source.slice(start, index); continue;
-    }
-    if (char === '-' || /[0-9]/.test(char)) {
-      const token = source.slice(index).match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/)[0];
-      safe += /^-?\d+$/.test(token) && !Number.isSafeInteger(Number(token)) ? JSON.stringify(token) : token;
-      index += token.length; continue;
-    }
-    safe += char; index++;
-  }
-  return JSON.parse(safe);
-}
+function parse115Json(source) { return share115Api.parse115Json(source); }
 
 async function apiRequest(url, options = {}, cookie = '') {
   if (shuttingDown) throw Object.assign(new Error('软件正在退出，未发起新请求'), { monitorCancelled:true });
@@ -1490,41 +1455,11 @@ async function apiRequest(url, options = {}, cookie = '') {
   try { return /(^|\.)115\.com$/.test(requested.hostname) ? parse115Json(text) : JSON.parse(text); } catch { throw new Error('服务器返回了无法识别的响应'); }
 }
 
-function check115(result) {
-  const ok = result && (result.state === true || result.success === true);
-  if (ok) return;
-  const code = Number(result?.errno ?? result?.errNo ?? result?.code ?? -1);
-  const message = String(result?.error || result?.error_msg || result?.msg || result?.message || '115 请求失败');
-  if ([99, 401, 990001].includes(code) || message.includes('登录')) throw new Error('115 登录已失效，请重新登录');
-  throw new Error(message);
-}
+function check115(result) { share115Api.check115(result); }
 
-function getAccount(cookie) {
-  return apiRequest('https://my.115.com/?ct=ajax&ac=nav', {}, cookie).then(result => {
-    check115(result);
-    const data = result.data || {};
-    const user = data.user_info || data.user || data;
-    const uid = String(user.user_id || user.uid || user.id || (cookie.match(/(?:^|;\s*)UID=(\d+)/) || [])[1] || '');
-    if (!uid) throw new Error('Cookie 中没有有效的 UID，请重新登录 115');
-    return { uid, nickname: String(user.user_name || user.nick_name || user.nickname || user.uname || '115用户') };
-  });
-}
+function getAccount(cookie) { return share115Api.getAccount(apiRequest, cookie); }
 
-function getFolders(cookie, cid = '0') {
-  const params = new URLSearchParams({ cid, aid: '1', o: 'file_name', asc: '1', show_dir: '1', nf: '1', offset: '0', limit: '1000' });
-  return apiRequest(`https://webapi.115.com/files?${params}`, {}, cookie).then(result => {
-    check115(result);
-    const rows = Array.isArray(result.data) ? result.data : (result.data?.list || result.list || []);
-    return rows.map(item => {
-      const hasDirFlag = item.is_dir !== undefined;
-      const isDir = hasDirFlag ? Number(item.is_dir) === 1 : (!item.fid || String(item.fid) === '0') && item.cid;
-      // 115 返回中没有 is_dir 时，cid 是文件夹自身 ID，fid 只是文件条目字段。
-      const returnedCid = String(item.cid ?? '');
-      const folderId = returnedCid && returnedCid !== String(cid) && returnedCid !== '0' ? returnedCid : (item.file_id || item.fid);
-      return isDir ? { cid: String(folderId), name: String(item.n || item.name || item.file_name || ''), parent: cid } : null;
-    }).filter(item => item && item.name && /^\d+$/.test(item.cid) && item.cid !== '0');
-  });
-}
+function getFolders(cookie, cid = '0') { return share115Api.getFolders(apiRequest, cookie, cid); }
 
 function defaultSaveFolder() {
   const folder = readConfig().folder;
@@ -1532,18 +1467,7 @@ function defaultSaveFolder() {
   if (folder.requiresReselect || !/^\d+$/.test(String(folder.cid ?? ''))) throw new Error('保存目录无效或115账户已更换，请重新选择默认目录');
   return { ...folder, cid: String(folder.cid), name: String(folder.name || folder.cid) };
 }
-async function validateSaveFolder(cookie, folder, uid) {
-  if (folder.uid && String(folder.uid) !== String(uid)) throw new Error('115账户与保存目录不匹配，请重新选择目录');
-  if (!/^\d+$/.test(String(folder.cid ?? ''))) throw new Error('保存目录ID无效，请重新选择目录');
-  if (String(folder.cid) === '0') return { cid: '0', name: '根目录', uid: String(uid) };
-  const params = new URLSearchParams({ cid: String(folder.cid), aid: '1', offset: '0', limit: '1', show_dir: '1' });
-  const result = await apiRequest(`https://webapi.115.com/files?${params}`, {}, cookie); check115(result);
-  const path = Array.isArray(result.path) ? result.path : result.data?.path;
-  const last = Array.isArray(path) ? path[path.length - 1] : null;
-  const actualCid = last ? String(last.cid ?? last.file_id ?? last.id ?? '') : String(result.cid ?? result.data?.cid ?? '');
-  if (actualCid !== String(folder.cid)) throw new Error('115未确认所选目录，目录可能已删除或ID错误，请重新读取并选择文件夹');
-  return { cid: actualCid, name: String(last?.name || last?.n || folder.name || actualCid), uid: String(uid) };
-}
+async function validateSaveFolder(cookie, folder, uid) { return share115Api.validateSaveFolder(apiRequest, cookie, folder, uid); }
 function responseAccepted(result) {
   const value = result?.state ?? result?.success;
   return value === true || value === 1 || value === '1' || value === 'success';

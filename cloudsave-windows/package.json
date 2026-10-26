@@ -79,6 +79,7 @@
       "cloud-submit-sync.js",
       "monitor-size-ranges.js",
       "share115-provider.js",
+      "share115-api.js",
       "share115-monitor.js",
       "share115-renderer.js",
       "guangya-provider.js",
