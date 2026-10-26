@@ -74,6 +74,10 @@ res/mipmap-*/ic_launcher.png               与套壳版同一套图标
 node android-app/tools/preview.cjs            # http://127.0.0.1:8801/
 ```
 
+启动时它会自己跑一遍 `bundle.cjs`：产物不入库，干净检出里如果还要人手先跑一步，这个测试台就总会被跳过；
+更要紧的是，留着上一次的旧产物，浏览器里验的就不再是当前源码。`tests/test-android-preview.cjs`
+故意先写一份假的旧产物再启动，用它来钉住这条。
+
 0.1.2 的资源库、标签切换、详情与复制磁力就是在这里对着真实站点验的（32 条列表、翻页、搜索命中、
 详情里 1080P 种子）；它同时抓出过三个只有实机才会暴露的问题。这不能替代你在手机上的安装验证，
 只能把「装上了才发现打不开」的比例降下来。
@@ -89,10 +93,11 @@ cd android-app
 产物 `build/CloudSave-Standalone-<versionName>.apk`（文件名里的版本从 `AndroidManifest.xml` 读，不会和包内版本对不上）。
 默认 SDK 路径 `C:\Android-sdk`，用 `-Sdk D:\other-sdk` 覆盖；脚本自动取 `build-tools`/`platforms` 下版本号最大的目录。
 
-三个必须保留的构建细节：
+必须保留的构建细节：
 
 - **`javac -parameters` 不能去掉**：JDK 21 会给内部类合成的 `this$0` 写一个名字为 null 的 `MethodParameters` 条目，build-tools 34.0.0 的 d8 读到就 `NullPointerException`。
 - **`build.ps1` 只能写 ASCII**：Windows PowerShell 5.1 对无 BOM 的 `.ps1` 按本机代码页解码，中文注释会把脚本读碎。界面文案在 `assets/` 和 `res/values/strings.xml` 里，那些是 UTF-8 数据，不受影响。
+- **进 apk 的源码必须是 LF**：apk 里的 `cloudsave-modules.js` 是把桌面端 7 个模块**逐字节内联**出来的，`assets/www/` 其余文件也是逐字节复制。仓库里存的是 LF，但 Windows 上 `core.autocrlf=true` 会在检出时改成 CRLF——那样同一份提交在两台机器上打出不同的 apk（实测差 367 字节），我也就没法再说「手机上跑的就是仓库里那份」。`.gitattributes` 因此把 `*.js *.cjs *.mjs *.html *.css` 钉成 `eol=lf`，`tools/bundle.cjs` 读到带 CR 的源文件直接报错，测试再断言产物里没有 `\r`。
 - **assets 不能用 `aapt2 link -A`**：Windows 上的 aapt2 会把目录条目写成 `assets/www\index.html`（前缀用 `/`、相对段用 `\`），Android 的 `AssetManager` 认不出来，WebView 起手就是 `net::ERR_FILE_NOT_FOUND`。所以 `build.ps1` 里 `aapt2 link` 不带 `-A`，assets 由 step 4 逐个用正斜杠名字写进 zip，step 7 再按字节读一遍中央目录做门禁：任何条目名里有 `\`、或者缺必需条目，构建直接失败。
 - **必需条目从 `index.html` 推出来**：step 7 解析页面里 `src`/`href` 指向的本地文件，逐个要求它们在 apk 里。往页面加一个脚本不必同时记得改构建脚本——名单落后一步，手机上就是一个打不开的 `ERR_FILE_NOT_FOUND`，正是 0.1.0 踩过的那类坑。
 
@@ -155,13 +160,16 @@ SHA-256: 26a90120d2053d6ada0e9fe27ec590bc23a68f33d174164e753c31de4b8fdfb2
 | --- | --- |
 | 0.1.0 / versionCode 1 | 首个独立版。**实机装上了、打不开**：首屏 `net::ERR_FILE_NOT_FOUND`，原因是上面第三条构建细节——apk 里 5 个 assets 条目名全是反斜杠。已废弃，别再装。 |
 | 0.1.1 / versionCode 2 | 修掉 assets 条目名，并在构建里加了字节级门禁。**与 0.1.0 同一把签名密钥，直接覆盖安装即可，不用先卸载。** |
-| 0.1.2 / versionCode 3 | 加「资源库」标签（BT影视，不登录就能浏览），页面起手落在这里，不再强制登录；打包清单从 4 个模块扩到 7 个；WebView 过旧判定改成不依赖 eval 的能力判据（门槛 92）；必需条目改为从 `index.html` 推导。**同一把密钥，覆盖安装即可。** |
+| 0.1.2 / versionCode 3 | 加「资源库」标签（BT影视，不登录就能浏览），页面起手落在这里，不再强制登录；打包清单从 4 个模块扩到 7 个；WebView 过旧判定改成不依赖 eval 的能力判据（门槛 92）；必需条目改为从 `index.html` 推导；换行归一化后重打，包内字节不再随检出方式变化。**同一把密钥，覆盖安装即可。** |
 
 ## 验证状态：这台机器上没在真机跑过
 
 我没有任何 Android 设备或模拟器（这台是 OpenStack 虚机，不支持嵌套虚拟化）。以下结论全是离线得到的：
 
 - 发布签名构建通过；`apksigner verify` v1/v2/v3 为 true；`zipalign -c 4` 通过。
+- 产物 `CloudSave-Standalone-0.1.2.apk`：124,156 字节，sha256 `d83c0f11b4e80b91127424831abed60da8d4eed22bf07b42f637f227efec4216`。
+- **这个包现在是可复现的**：另开一份全新克隆（本机 `core.autocrlf=true` 照旧开着）跑 `node android-app/tools/bundle.cjs`，得到同一份 46,530 字节、sha256 `766ba4dc138df302a78b1b6b4ccc298a1e820380dd4975f79a4dad8d2bc655e3` 的内联结果。修之前不是这样——apk 里内联的是被检出改成 CRLF 的源码，换台机器算不出同一个包，所以我先打的那次 0.1.2 已作废重打（旧字节归档在备份的 `superseded/apk/`，别装）。
+- 干净克隆里全量测试同样通过：**153/153**。这条也是这轮补上的——以前 `git am`/`git clone` 出来的树里 `test-android-preview.cjs` 必红，因为产物不入库又没人先生成它。
 - `aapt2 dump badging`：包名、versionCode 3 / versionName 0.1.2、minSdk 23、targetSdk 34、只有 INTERNET、启动 Activity 正确。
 - apk 条目名按字节读中央目录复核过（构建门禁之外又用独立脚本重读一遍）：**18 个条目，0 个反斜杠；`assets/www/` 7 个文件与磁盘逐一 CRC 相符**，回读解压后字节数一致。（0.1.0 当时只用了 `unzip -l` 和 Python `zipfile.namelist()` 看，这两个都会在读取时把 `\` 归一成 `/`，所以那句「条目名全部用 `/`」是错的，问题正是在手机上才暴露出来。）
 - 门禁现在从 `index.html` 推导必需条目，本次报出 6 个引用（app.css + 5 个脚本）全部在包内。
