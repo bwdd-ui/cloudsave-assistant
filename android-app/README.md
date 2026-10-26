@@ -103,6 +103,8 @@ cd android-app
 
 签名与对齐的顺序不能反：先 `zipalign -f 4` 再 `apksigner sign`，否则签名会被重排破坏。
 
+**zip 条目时间戳必须钉住**：条目时间算进签名字节里。aapt2 用它看到的资源文件 mtime 给自己那几条盖章，我手写的 `classes.dex` 与 `assets/*` 也用当时时刻，于是同一个提交在两个目录里构建出两个不同哈希的 apk（都是 124,156 字节，sha 不同），连续构建两次也不同。step 4 现在把**每一条**都改成固定的 2024-01-01T00:00:00Z，两次构建、两个目录才算出同一个包。
+
 ## 发布签名
 
 `cloudsave-standalone-release.keystore`（alias `cloudsave-standalone`，RSA-2048，有效期 10000 天）与
@@ -160,15 +162,16 @@ SHA-256: 26a90120d2053d6ada0e9fe27ec590bc23a68f33d174164e753c31de4b8fdfb2
 | --- | --- |
 | 0.1.0 / versionCode 1 | 首个独立版。**实机装上了、打不开**：首屏 `net::ERR_FILE_NOT_FOUND`，原因是上面第三条构建细节——apk 里 5 个 assets 条目名全是反斜杠。已废弃，别再装。 |
 | 0.1.1 / versionCode 2 | 修掉 assets 条目名，并在构建里加了字节级门禁。**与 0.1.0 同一把签名密钥，直接覆盖安装即可，不用先卸载。** |
-| 0.1.2 / versionCode 3 | 加「资源库」标签（BT影视，不登录就能浏览），页面起手落在这里，不再强制登录；打包清单从 4 个模块扩到 7 个；WebView 过旧判定改成不依赖 eval 的能力判据（门槛 92）；必需条目改为从 `index.html` 推导；换行归一化后重打，包内字节不再随检出方式变化。**同一把密钥，覆盖安装即可。** |
+| 0.1.2 / versionCode 3 | 加「资源库」标签（BT影视，不登录就能浏览），页面起手落在这里，不再强制登录；打包清单从 4 个模块扩到 7 个；WebView 过旧判定改成不依赖 eval 的能力判据（门槛 92）；必需条目改为从 `index.html` 推导；换行归一 + 条目时间戳固定后，同一个提交可以逐字节复现重打。**同一把密钥，覆盖安装即可。** |
 
 ## 验证状态：这台机器上没在真机跑过
 
 我没有任何 Android 设备或模拟器（这台是 OpenStack 虚机，不支持嵌套虚拟化）。以下结论全是离线得到的：
 
 - 发布签名构建通过；`apksigner verify` v1/v2/v3 为 true；`zipalign -c 4` 通过。
-- 产物 `CloudSave-Standalone-0.1.2.apk`：124,156 字节，sha256 `d83c0f11b4e80b91127424831abed60da8d4eed22bf07b42f637f227efec4216`。
-- **这个包现在是可复现的**：另开一份全新克隆（本机 `core.autocrlf=true` 照旧开着）跑 `node android-app/tools/bundle.cjs`，得到同一份 46,530 字节、sha256 `766ba4dc138df302a78b1b6b4ccc298a1e820380dd4975f79a4dad8d2bc655e3` 的内联结果。修之前不是这样——apk 里内联的是被检出改成 CRLF 的源码，换台机器算不出同一个包，所以我先打的那次 0.1.2 已作废重打（旧字节归档在备份的 `superseded/apk/`，别装）。
+- 产物 `CloudSave-Standalone-0.1.2.apk`：124,156 字节，sha256 `2964ab3edaf716d8253de8c10aba0b04915fd0b76efcf2950d0bc40851aaa043`。
+- **这个包现在真的可复现**：另开一份全新克隆（本机 `core.autocrlf=true` 照旧开着）、放在另一个目录里、用同一条 `build.ps1 -Release` 命令构建，产出的 apk 与上面**逐字节相同**。修之前不是这样，有两处泄漏：apk 里内联的源码跟着检出换成过 CRLF（同一提交差 367 字节），以及 zip 条目带着构建时刻的时间戳（内容一样、哈希不一样）。所以先前打的那次 0.1.2 已作废重打，旧字节归档在备份的 `superseded/apk/`，别装。
+  说清楚边界：这只证明**同版本工具链**下可复现。d8/aapt2/JDK 换个版本大概率还是不同的包，所以我给的核对依据是「条目内容 + 包内版本 + 证书指纹」，整包 sha 只在同工具链时可比。
 - 干净克隆里全量测试同样通过：**153/153**。这条也是这轮补上的——以前 `git am`/`git clone` 出来的树里 `test-android-preview.cjs` 必红，因为产物不入库又没人先生成它。
 - `aapt2 dump badging`：包名、versionCode 3 / versionName 0.1.2、minSdk 23、targetSdk 34、只有 INTERNET、启动 Activity 正确。
 - apk 条目名按字节读中央目录复核过（构建门禁之外又用独立脚本重读一遍）：**18 个条目，0 个反斜杠；`assets/www/` 7 个文件与磁盘逐一 CRC 相符**，回读解压后字节数一致。（0.1.0 当时只用了 `unzip -l` 和 Python `zipfile.namelist()` 看，这两个都会在读取时把 `\` 归一成 `/`，所以那句「条目名全部用 `/`」是错的，问题正是在手机上才暴露出来。）
