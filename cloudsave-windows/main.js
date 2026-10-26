@@ -158,7 +158,14 @@ function syncCloudDownloads(force=false,options) {return cloudDownloadCache.sync
 const cloudSubmitSync=new (require('./cloud-submit-sync').CloudSubmitSync)({account:()=>loadCookie().match(/(?:^|;\s*)UID=(\d+)/)?.[1]||'',sync:()=>syncCloudDownloads(true,{checkOldTasks:false}),active:()=>cloudDownloadCache.running,stopped:()=>shuttingDown,setTimer:(fn,ms)=>setTimeout(fn,ms),clearTimer:id=>clearTimeout(id),log:message=>appendMonitorLog(message,'info','','115')});
 
 function readConfig() {
-  if (!jsonStore) { try { return JSON.parse(fs.readFileSync(CONFIG_FILE(), 'utf8')); } catch { return {}; } }
+  if (!jsonStore) {
+    const target = CONFIG_FILE();
+    let raw;
+    try { raw = fs.readFileSync(target, 'utf8'); }
+    catch (error) { if (error.code === 'ENOENT') return {}; throw error; }
+    try { return JSON.parse(raw); }
+    catch (error) { throw new Error('配置文件无法读取，已保留原文件：' + error.message); }
+  }
   const target = CONFIG_FILE();
   if (configCache && Date.now() - configCheckedAt < 1000) return configCache;
   configCheckedAt = Date.now();
@@ -294,10 +301,15 @@ function saveCookie(cookie) {
   config.cookie = encryptSecret(cookie);
   writeConfig(config);
 }
+let plaintextSecretWarned = false;
 function encryptSecret(value) {
   const text = String(value || '');
   if (portableStorage) return portableStorage.encrypt(text);
-  return safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text).toString('base64') : text;
+  if (!safeStorage.isEncryptionAvailable()) {
+    if (!plaintextSecretWarned) { plaintextSecretWarned = true; appendMonitorLog('系统密钥库不可用，本次起登录凭据以明文保存，建议尽快在设置中重新登录', 'warning'); }
+    return text;
+  }
+  return safeStorage.encryptString(text).toString('base64');
 }
 function decryptSecret(value) {
   if (!value) return '';
@@ -2086,11 +2098,22 @@ function configureChineseMenu(){
 }
 function createWindow() {
   configureChineseMenu();
-  mainWindow = new BrowserWindow({ width: 1440, height: 920, minWidth: 1100, minHeight: 700, backgroundColor: '#f5f7fb', webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling:false } });
+  mainWindow = new BrowserWindow({ width: 1440, height: 920, minWidth: 1100, minHeight: 700, backgroundColor: '#f5f7fb', webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling:false } });
   backgroundWindow=require('./background-window').installBackgroundWindow({app,win:mainWindow,Tray,Menu,nativeImage,isQuitting:()=>quittingAfterFlush,read:()=>readConfig().windowBehavior || {},write:value=>{const config=readConfig();config.windowBehavior=value;writeConfig(config);}});
   mainWindow.loadFile(path.join(__dirname, 'index.html')).catch(error => dialog.showErrorBox('界面加载失败', '请检查程序文件是否完整。\n' + error.message));
+  // Only this window carries the preload bridge, so it must stay inside the application files; links are handed to the system browser instead.
+  const appRootUrl = pathToFileURL(`${__dirname}${path.sep}`).href;
+  mainWindow.webContents.on('will-navigate', (event, target) => { if (!target.startsWith(appRootUrl)) event.preventDefault(); });
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url).catch(() => {}); return { action: 'deny' }; });
   mainWindow.on('closed',()=>{if(process.platform!=='darwin')app.quit();});
 }
+
+// Every privileged channel is reached only through preload.js, which Electron attaches to the main window alone.
+// Installing the sender check here keeps it ahead of the first registration below.
+const { pathToFileURL } = require('url');
+const { createSenderChecker, installIpcGuard } = require('./ipc-guard');
+const { waitForQuitIdle } = require('./quit-wait');
+installIpcGuard(ipcMain, createSenderChecker(__dirname), (channel, event) => appendMonitorLog('已拒绝来自应用界面之外的调用', 'warning', `${channel} · ${event?.senderFrame?.url || '未知来源'}`));
 
 ipcMain.handle('runtime-version', () => applicationVersion);
 ipcMain.handle('background-settings',(_event,value)=>backgroundWindow?.settings(value) || {closeToTray:true,minimizeToTray:false,trayAvailable:false});
@@ -2142,7 +2165,7 @@ ipcMain.handle('guanying-login-window', async () => {
   if (guanyingLoginWindow && !guanyingLoginWindow.isDestroyed()) { guanyingLoginWindow.focus(); return guanyingLoginResult; }
   await restoreGuanyingSession();
   const webSession=session.fromPartition('persist:cloudsave-guanying');
-  const win = new BrowserWindow({ width: 1050, height: 800, title: '登录观影', webPreferences: { partition: 'persist:cloudsave-guanying', contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+  const win = new BrowserWindow({ width: 1050, height: 800, title: '登录观影', webPreferences: { partition: 'persist:cloudsave-guanying', contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false } });
   guanyingLoginWindow = win;
   let closing = false, accessReady=false;
   const capture = async () => {
@@ -2242,7 +2265,7 @@ async function captureJyingSession(win){
 }
 ipcMain.handle('jying-login-window',async()=>{
  if(jyingLoginWindow&&!jyingLoginWindow.isDestroyed()){jyingLoginWindow.focus();return jyingLoginWindow._result;}
- await restoreJyingSession();const win=new BrowserWindow({width:1050,height:800,title:'聚影账号设置（登录后自动保存）',webPreferences:{partition:'persist:cloudsave-jying',contextIsolation:true,nodeIntegration:false}});jyingLoginWindow=win;let closing=false,loggedIn=false;
+ await restoreJyingSession();const win=new BrowserWindow({width:1050,height:800,title:'聚影账号设置（登录后自动保存）',webPreferences:{partition:'persist:cloudsave-jying',contextIsolation:true,nodeIntegration:false,sandbox:true}});jyingLoginWindow=win;let closing=false,loggedIn=false;
  win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',(event,target)=>{try{if(!['https://jying.top','https://www.jying.top'].includes(new URL(target).origin))event.preventDefault();}catch(_){event.preventDefault();}});
  const capture=()=>captureJyingSession(win).then(ok=>{loggedIn=ok;}).catch(()=>{});win.webContents.on('did-finish-load',capture);const timer=setInterval(capture,2000);
  win._result=new Promise(resolve=>{win.on('close',event=>{if(closing)return;event.preventDefault();closing=true;clearInterval(timer);capture().finally(()=>{if(!win.isDestroyed())win.destroy();});});win.on('closed',()=>{clearInterval(timer);jyingLoginWindow=null;resolve({loggedIn});});});win.loadURL('https://jying.top/login').catch(error=>appendMonitorLog('聚影登录窗口加载失败','warning',error.message,'jying'));return win._result;
@@ -2276,7 +2299,7 @@ ipcMain.handle('open-original', async (_event, raw) => {
 ipcMain.handle('site-login-window', () => {
   if (siteLoginWindow && !siteLoginWindow.isDestroyed()) { siteLoginWindow.focus(); return siteLoginResult; }
   const origin = mirrorConfig().current;
-  const win = new BrowserWindow({ width: 1050, height: 800, title: '登录不太灵', webPreferences: { partition: 'persist:cloudsave', contextIsolation: true, nodeIntegration: false } });
+  const win = new BrowserWindow({ width: 1050, height: 800, title: '登录不太灵', webPreferences: { partition: 'persist:cloudsave', contextIsolation: true, nodeIntegration: false, sandbox: true } });
   siteLoginWindow = win;
   let closing = false;
   const capture = async () => {
@@ -2356,11 +2379,11 @@ ipcMain.handle('validate-cookie', async (_event, raw) => {
   return account;
 });
 ipcMain.handle('login-window', async () => {
-  const win = new BrowserWindow({ width: 1100, height: 800, title: '登录 115', webPreferences: { contextIsolation: true, nodeIntegration: false } });
+  const win = new BrowserWindow({ width: 1100, height: 800, title: '登录 115', webPreferences: { partition: 'persist:cloudsave-115', contextIsolation: true, nodeIntegration: false, sandbox: true } });
   await win.loadURL('https://115.com/');
   return new Promise(resolve => {
     win.on('closed', async () => {
-      const cookies = await session.defaultSession.cookies.get({});
+      const cookies = await session.fromPartition('persist:cloudsave-115').cookies.get({});
       const wanted = new Set(['UID', 'CID', 'SEID', 'KID']);
       const values = new Map();
       for (const cookie of cookies) if (wanted.has(cookie.name) && /(^|\.)115\.com$/.test(cookie.domain.replace(/^\./, ''))) values.set(cookie.name, cookie.value);
@@ -2533,7 +2556,13 @@ if (jsonStore) app.on('before-quit', event => {
   for (const timer of lifecycleTimers) { clearInterval(timer); clearTimeout(timer); }
   if (monitorPushTimer) { clearTimeout(monitorPushTimer); monitorPushTimer = null; }
     await Promise.allSettled([offlineOperationQueue, metadataQueue, cloudDownloadCache.running, cloudSubmitSync.running, pan123Monitor?.running,share115Monitor?.running,guangyaModule?.running, guanyingSessionManager?.close()]);
-    while (monitorRunning || guanyingMonitor.running || btbtlaMonitor.running || btbtlaExportRunning || jyingMonitor.running || jyingExportRunning || qmp4Monitor.running || qmp4ExportRunning || guanyingExportRunning || placementCheckRunning || batchSubmitRunning || scanExportRunning) await waitResource(25);
+    const quitWait = await waitForQuitIdle([
+      ['不太灵监控', () => monitorRunning], ['观影监控', () => guanyingMonitor.running], ['BT影视监控', () => btbtlaMonitor.running],
+      ['聚影监控', () => jyingMonitor.running], ['七味监控', () => qmp4Monitor.running],
+      ['观影导出', () => guanyingExportRunning], ['BT影视导出', () => btbtlaExportRunning], ['聚影导出', () => jyingExportRunning], ['七味导出', () => qmp4ExportRunning],
+      ['保存位置核查', () => placementCheckRunning], ['批量离线提交', () => batchSubmitRunning], ['扫描结果导出', () => scanExportRunning],
+    ], { wait: waitResource });
+    if (quitWait.timedOut) appendMonitorLog('退出等待超过 20 秒，未结束的任务已放弃等待，按已保存的数据退出', 'warning', quitWait.pending.join('、'));
     await jsonStore.close();
   })().then(() => { quittingAfterFlush = true; app.quit(); }).catch(error => { quitFlushInFlight = false; dialog.showErrorBox('数据保存失败，尚未退出', error.message + '\n请检查磁盘空间后重试，避免丢失记录。'); });
 });

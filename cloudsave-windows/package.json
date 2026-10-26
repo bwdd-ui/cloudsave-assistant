@@ -38,6 +38,8 @@
       "portable-storage.js",
       "buffered-json.js",
       "json-writer.js",
+      "quit-wait.js",
+      "ipc-guard.js",
       "resource-archive.js",
       "guanying-provider.js",
       "guanying-monitor.js",
