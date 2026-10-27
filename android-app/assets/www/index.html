@@ -25,27 +25,22 @@
 <main>
 <div id="panel-library">
   <section class="card">
-    <h2>资源库 <span class="free">不需要登录</span></h2>
-    <p class="hint">这里浏览的是资源网站本身的列表与种子，和网盘登录无关；解析用的是桌面端同一份站点代码。</p>
+    <h2>资源库 <span class="free">不需要网盘登录</span></h2>
+    <p class="hint">这里浏览的是资源网站本身的列表与种子，和网盘登录无关；解析用的是桌面端同一份站点代码。
+      个别站点自己要求人机验证或站点账号，验证/登录都在应用内的那个网页里完成，凭据只存在这台手机上、按站点分开存。</p>
     <div class="row-line">
-      <label class="pick">站点 <select id="lib-site"><option value="btbtla">BT影视</option></select></label>
-      <label class="pick">分类 <select id="lib-category">
-        <option value="mv">电影</option>
-        <option value="tv">剧集</option>
-        <option value="updates">最新上传</option>
-      </select></label>
+      <label class="pick">站点 <select id="lib-site"></select></label>
+      <label class="pick">分类 <select id="lib-category"></select></label>
     </div>
-    <div class="row-line">
-      <label class="pick">类型 <select id="lib-genre"></select></label>
-      <label class="pick">地区 <select id="lib-region"></select></label>
-    </div>
-    <div class="row-line">
-      <label class="pick">年份 <select id="lib-year"></select></label>
-      <label class="pick">排序 <select id="lib-sort"></select></label>
-    </div>
+    <!-- 筛选行由资源库脚本按站点现搭：七味多「语言」，聚影多「标签」和「资源类型」。 -->
+    <div id="lib-filters" class="row-line"></div>
     <div class="row-line">
       <input id="lib-search" type="search" placeholder="搜索片名（改完自动查）" autocomplete="off" spellcheck="false">
       <button id="lib-go">重新加载</button>
+    </div>
+    <div class="row-line">
+      <button id="lib-verify" class="ghost small" hidden></button>
+      <span id="lib-gate-state" class="hint"></span>
     </div>
     <p id="lib-status" class="summary"></p>
     <div id="lib-items" class="grid"></div>
@@ -59,7 +54,10 @@
   <section id="lib-detail" class="card" hidden>
     <h2 id="lib-detail-title"></h2>
     <p id="lib-detail-meta" class="hint"></p>
+    <h3>种子 / 磁力</h3>
     <div id="lib-seeds"></div>
+    <h3 id="lib-clouds-title" hidden>网盘链接</h3>
+    <div id="lib-clouds"></div>
     <button id="lib-detail-close" class="ghost">返回资源库</button>
   </section>
 </div>

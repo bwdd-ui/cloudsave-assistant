@@ -25,12 +25,13 @@ const port = Number(argument('--port', 8801));
 const dataFile = path.resolve(argument('--data', path.join(require('os').tmpdir(), 'cloudsave-phone-preview.json')));
 
 // 存储分两间：secrets 对应 AndroidKeyStore，plain 对应 SharedPreferences。
+// 第三间 loginFor 只在这台开发机上存在：它是「应用内登录窗的结果」夹具，apk 里没有这个概念。
 function loadStore() {
   try {
     const parsed = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
-    return { plain: parsed.plain || {}, secrets: parsed.secrets || {} };
+    return { plain: parsed.plain || {}, secrets: parsed.secrets || {}, loginFor: parsed.loginFor || {} };
   } catch (error) {
-    return { plain: {}, secrets: {} };
+    return { plain: {}, secrets: {}, loginFor: {} };
   }
 }
 const store = loadStore();
@@ -57,7 +58,12 @@ const BRIDGE = `
     plainGet: function (key) { return call('POST', '/__plain-get', { key: key }); },
     plainSet: function (key, value) { call('POST', '/__plain-set', { key: key, value: value }); },
     log: function (level, message) { call('POST', '/__log', { level: level, message: message }); },
-    login: function () { call('POST', '/__login', {}); },
+    login: function (requestJson) {
+      // 原生那边是「另开一个窗口，回来再送结果」，所以这里也要异步送回，页面才测得到同一条时序。
+      var request = requestJson ? JSON.parse(requestJson) : {};
+      var answer = call('POST', '/__login', request);
+      setTimeout(function () { window.CsHost.onLogin(JSON.parse(answer)); }, 0);
+    },
     info: function () { return JSON.stringify({ package: 'preview', version: '预览', webview: navigator.userAgent.match(/Chrome\\/(\\d+)/)?.[1] || '?', os: navigator.platform }); },
   };
   window.CsHost = window.CsHost || {};
@@ -97,6 +103,10 @@ async function forward(payload) {
   const url = new URL(payload.url);
   if (url.protocol !== 'https:') return { error: '只允许 HTTPS 请求：' + url.protocol + '//' + url.host };
   const headers = { 'Accept-Encoding': 'identity', ...(payload.headers || {}) };
+  // 站点凭据这条链要能被看见：存进 secrets 以后，下一次请求到底有没有把 Cookie 带出去。
+  // 只报长度不报内容，免得满屏日志里留下一份能登人的凭据。
+  const cookie = payload.headers && payload.headers.Cookie;
+  if (cookie) console.log(`[预览] ${url.host} 出站带 Cookie（${String(cookie).length} 字节）`);
   const init = { method: (payload.method || 'GET').toUpperCase(), headers, redirect: 'manual' };
   if (payload.body != null) init.body = String(payload.body);
   let response;
@@ -135,7 +145,16 @@ const server = http.createServer((request, response) => {
       if (route === '/__plain-get') return json(response, store.plain[payload.key] || '');
       if (route === '/__plain-set') { store.plain[payload.key] = payload.value; saveStore(); return json(response, ''); }
       if (route === '/__log') { console.log(`[页面 ${payload.level}] ${payload.message}`); return json(response, ''); }
-      if (route === '/__login') { console.log('[预览] 登录窗口在手机上才是真的，这里只记一笔；用「改用手动粘贴 Cookie」走凭据路径'); return json(response, ''); }
+      if (route === '/__login') {
+        // 应用内登录窗在浏览器里做不出来（要真人扫码/过人机验证）。这里按 host 查夹具：
+        // 没配就照实回「窗口已取消」，配了就把那一份凭据原样送回，让认领、保存、重读这条链在浏览器里跑一遍。
+        let host = '115.com';   // 不带 url 就是 115 那一页，和原生层的默认值一致
+        try { host = new URL(payload.url).host; } catch (error) { /* 地址不合法也按取消回，不让服务炸在这里 */ }
+        const answer = store.loginFor[host] || { url: payload.url || 'https://115.com/', cancelled: true };
+        console.log(`[预览] 登录窗 ${host}${payload.hint ? '（' + payload.hint + '）' : ''}：`
+          + (store.loginFor[host] ? '用夹具回凭据' : '没有夹具，按取消处理；要验这条链就往存储文件的 loginFor 里写 ' + host));
+        return json(response, answer);
+      }
       return json(response, { error: '未知的预览接口 ' + route });
     }).catch(error => json(response, { error: error.message }));
     return;
@@ -160,5 +179,5 @@ const server = http.createServer((request, response) => {
 fs.writeFileSync(path.join(WWW, 'cloudsave-modules.js'), require('./bundle.cjs').build());
 server.listen(port, '127.0.0.1', () => {
   console.log(`手机页面预览：http://127.0.0.1:${port}/  （存储 ${dataFile}）`);
-  console.log('原生桥里 login 是打开系统 WebView 登录窗，这里只打印一行；要验凭据路径请粘贴 Cookie。');
+  console.log('原生桥里 login 是打开应用内登录窗；这里按 host 查存储文件的 loginFor 夹具，没有夹具就回「已取消」。');
 });

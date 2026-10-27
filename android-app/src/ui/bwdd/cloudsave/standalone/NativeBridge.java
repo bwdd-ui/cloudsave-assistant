@@ -59,8 +59,9 @@ final class NativeBridge {
   }
 
   @JavascriptInterface
-  public void login() {
-    activity.openLogin();
+  public void login(String requestJson) {
+    // 不带参数 = 115 登录窗；带参数 = 页面指定的站点（七味的网站验证、聚影的登录）。
+    activity.openLogin(requestJson);
   }
 
   @JavascriptInterface

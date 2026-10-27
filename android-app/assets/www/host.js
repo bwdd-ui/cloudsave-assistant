@@ -42,6 +42,8 @@
       ok: result.status >= 200 && result.status < 300,
       headers: { get: function (name) { return headers[String(name).toLowerCase()] || null; } },
       text: function () { return Promise.resolve(result.body || ''); },
+      // 聚影的接口只回 JSON，模块里写的就是 response.json()；解析失败交给调用方判，桥不替业务做决定。
+      json: function () { return Promise.resolve(JSON.parse(result.body || '')); },
     };
   }
 
@@ -74,7 +76,9 @@
     get: function (key, fallback) { var value = native.plainGet(key); return value === '' ? (fallback == null ? '' : fallback) : value; },
     set: function (key, value) { native.plainSet(key, String(value)); },
     log: function (level, message) { native.log(String(level || 'info'), String(message || '')); },
-    login: function () { native.login(); },
+    // 不带参数就是 115 登录窗（转存页用）；带参数时由原生层在那个地址上完成登录或网站验证，
+    // 结果照样从 CsHost.onLogin 送回。资源库用这条来清七味的验证页、取聚影的登录态。
+    login: function (request) { native.login(request ? JSON.stringify(request) : ''); },
     info: function () { try { return JSON.parse(native.info()); } catch (error) { return {}; } },
   };
 

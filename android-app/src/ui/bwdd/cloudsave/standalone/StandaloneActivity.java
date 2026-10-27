@@ -29,6 +29,7 @@ public class StandaloneActivity extends Activity {
   private static final String LOCAL_PREFIX = "file:///android_asset/www/";
 
   private WebView web;
+  private String launchUrl = "";
 
   @Override
   protected void onCreate(Bundle savedState) {
@@ -82,11 +83,30 @@ public class StandaloneActivity extends Activity {
     web.loadUrl(START_PAGE);
   }
 
-  void openLogin() {
+  /**
+   * 打开应用内的那个真实网页。参数由页面传来，形如
+   * {"url":"https://...","hint":"...","wanted":"","storageKeys":"app_user_token"}：
+   * wanted 缺省是 115 的四个 Cookie 名，给了空串就是「取这个地址全部可见的 Cookie」。
+   * 地址是否可信由 LoginActivity 把关——它只接受 https。
+   */
+  void openLogin(final String requestJson) {
     runOnUiThread(new Runnable() {
       @Override
       public void run() {
-        startActivityForResult(new Intent(StandaloneActivity.this, LoginActivity.class), REQUEST_LOGIN);
+        Intent intent = new Intent(StandaloneActivity.this, LoginActivity.class);
+        launchUrl = "";
+        try {
+          JSONObject request = new JSONObject(requestJson == null || requestJson.isEmpty() ? "{}" : requestJson);
+          for (String key : new String[] {"url", "hint", "wanted", "storageKeys"}) {
+            if (request.has(key)) {
+              intent.putExtra(key, request.optString(key));
+            }
+          }
+          launchUrl = intent.getStringExtra("url") == null ? LoginActivity.DEFAULT_URL : intent.getStringExtra("url");
+        } catch (Exception error) {
+          AppLog.write(StandaloneActivity.this, "warning", "登录窗参数读不出来，按 115 登录打开：" + error.getMessage());
+        }
+        startActivityForResult(intent, REQUEST_LOGIN);
       }
     });
   }
@@ -99,7 +119,8 @@ public class StandaloneActivity extends Activity {
     }
     String payload = data == null ? null : data.getStringExtra("result");
     if (payload == null || payload.isEmpty()) {
-      payload = "{\"cancelled\":true}";
+      // 用户直接按返回键关掉窗口时原生层没有结果，这里也补上地址，页面才知道是谁的等待结束了。
+      payload = "{\"cancelled\":true,\"url\":" + JSONObject.quote(launchUrl == null ? "" : launchUrl) + "}";
     }
     final String script = payload;
     runOnUiThread(new Runnable() {

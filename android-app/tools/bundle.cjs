@@ -16,6 +16,9 @@ const MODULES = [
   'site-reader.js',
   'filtered-library-pages.js',
   'btbtla-provider.js',
+  'qmp4-provider.js',
+  'jying-rate-limit.js',
+  'jying-provider.js',
 ];
 
 // Node 内置依赖：WebView 里没有 require('crypto')。列在这里的按名字交给页面运行时提供，

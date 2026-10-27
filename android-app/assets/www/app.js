@@ -223,14 +223,21 @@
     $('cancel').addEventListener('click', function () { state.cancel = true; log('取消请求已记下，正在当前这一步结束后停下…', 'warning'); });
   }
 
-  window.CsHost.onLogin = function (payload) {
-    if (!payload || !payload.cookie) { log(payload && payload.error ? '登录未完成：' + payload.error : '登录窗口已取消', 'warning'); return; }
+  // 登录窗现在有三种用途（115 登录、七味验证、聚影登录），结果按地址认领：
+  // 只认 115 这几个域名，别的地址回来的 Cookie 绝不能写进 cookie115——那会把站点凭据当网盘凭据用。
+  window.CsHost.onLoginResult(function (payload) {
+    if (!/115\.com|115cdn\.com|anxia\.com/i.test(String((payload || {}).url || ''))) return false;
+    if (!payload.cookie) {
+      log(payload.error ? '登录未完成：' + payload.error : '登录窗口已取消，没有读到 115 凭据', 'warning');
+      return true;
+    }
     setBusy(true, '校验登录…');
     useCookie(payload.cookie, '登录窗口').catch(function (error) {
       log('登录凭据不可用：' + error.message, 'warning');
       setBusy(false);
     });
-  };
+    return true;
+  });
 
   // 只有原生层才知道的消息（例如系统密钥库退回明文）也进同一个日志。
   window.CsHost.onSystemLog = function (level, message) { log(message, level); };

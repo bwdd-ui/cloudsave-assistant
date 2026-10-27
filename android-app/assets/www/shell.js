@@ -1,4 +1,4 @@
-// 手机端的共享外壳：标签切换、运行日志、页脚版本。
+// 手机端的共享外壳：标签切换、运行日志、页脚版本、登录窗结果的认领式分发。
 // 各面板（转存、资源库）只通过 window.CsPhone 用这里的工具，避免每个面板各写一份日志。
 (function () {
   'use strict';
@@ -53,6 +53,23 @@
       Object.keys(fields).forEach(function (id) { var box = $(id); if (box) box.value = fields[id]; });
       switchTab('transfer');
     },
+  };
+
+  // 登录窗原生层只有一个，回来的凭据却可能属于不同站点：115 的登录、七味的网站验证、聚影的登录
+  // 都从同一个 CsHost.onLogin 送回。所以这里做成「认领式」分发：按注册顺序问一遍，
+  // 谁认这个地址谁处理并且返回 true；没人认领就明确报出来，不把凭据默默写进别人的键里。
+  var loginHandlers = [];
+  window.CsHost.onLoginResult = function (handler) { loginHandlers.push(handler); };
+  window.CsHost.onLogin = function (payload) {
+    var result = payload || {};
+    for (var index = 0; index < loginHandlers.length; index++) {
+      try {
+        if (loginHandlers[index](result)) return;
+      } catch (error) {
+        log('处理登录窗结果时出错：' + error.message, 'warning');
+      }
+    }
+    log('登录窗回来的地址没有对应面板，凭据已丢弃：' + (result.url || '（无地址）'), 'warning');
   };
 
   $('tab-library').addEventListener('click', function () { switchTab('library'); });

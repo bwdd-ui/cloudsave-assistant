@@ -44,4 +44,4 @@ class Qmp4Provider{
  async torrent(seed){return {...seed,zfiles:seed.zfiles || []};}
  close(){this.closed=true;this.queue.close();if(this.window&&!this.window.isDestroyed())this.window.destroy();}
 }
-module.exports={ORIGIN,TYPES,catalogPath,extractHtml,Qmp4Provider};
+module.exports={ORIGIN,TYPES,catalogPath,isVerificationPage,extractHtml,Qmp4Provider};

@@ -41,6 +41,11 @@ function request(port, method, route, body) {
   const modules = path.join(www, 'cloudsave-modules.js');
   fs.writeFileSync(modules, '// 故意留下的旧产物\n');
   const dataFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cs-preview-')), 'store.json');
+  // 登录夹具：模拟「用户在应用内窗口里登录成了」那次回包，只有 jying.top 有。
+  // 它让这个测试台能在浏览器里跑完「凭据回来 → 按站点存 → 重新读取」这条链，而不只是跑到按钮为止。
+  const jyingAnswer = { url: 'https://jying.top/login', cookie: 'csrftoken=abc; sessionid=1',
+    storage: { app_user_token: 'TOKEN', app_user_token_expires: '9999999999999', __ua: 'PreviewUA' } };
+  fs.writeFileSync(dataFile, JSON.stringify({ loginFor: { 'jying.top': jyingAnswer } }));
   const child = spawn(process.execPath, [tool, '--port', String(port), '--data', dataFile], { stdio: ['ignore', 'pipe', 'pipe'] });
   let output = '';
   child.stdout.on('data', chunk => { output += chunk; });
@@ -90,6 +95,19 @@ function request(port, method, route, body) {
     assert.equal((await request(port, 'POST', '/__secret-get', { key: 'tab' })).text, '', '两间存储串了');
     assert.match(fs.readFileSync(dataFile, 'utf8'), /UID=1/, '落盘的存储里没有刚写进去的凭据');
 
+    // 4.1 登录窗契约：假桥必须像原生层那样带请求参数、异步把结果送回 CsHost.onLogin，
+    //     并且回来的包一定带 url——页面的认领分发全靠它。
+    const bridge = (await request(port, 'GET', '/__bridge.js')).text;
+    assert.match(bridge, /login: function \(requestJson\)/, '假桥的 login 没收参数，资源库的站点验证在浏览器里根本开不了');
+    assert.match(bridge, /window\.CsHost\.onLogin\(/, '结果没送回 CsHost.onLogin，两边契约就断在这里');
+    assert.equal(JSON.parse((await request(port, 'POST', '/__login', { url: 'https://jying.top/login' })).text).cookie,
+      jyingAnswer.cookie, '配了夹具却没用，凭据这条链在浏览器里验不了');
+    const cancelled = JSON.parse((await request(port, 'POST', '/__login', { url: 'https://www.qmp4.com/vt/1.html' })).text);
+    assert.equal(cancelled.cancelled, true);
+    assert.equal(cancelled.url, 'https://www.qmp4.com/vt/1.html', '取消也要带地址，不然页面不知道谁的等待结束了');
+    assert.equal(JSON.parse((await request(port, 'POST', '/__login', {})).text).url, 'https://115.com/',
+      '不带地址要和原生层一样默认开 115 那一页');
+
     // 5. 目录逃逸：解码后拼出的路径必须还在 assets/www 里。
     const escape = await request(port, 'GET', '/%2e%2e%2f%2e%2e%2fcloudsave-windows%2fshare115-api.js');
     assert.equal(escape.status, 404, '预览服务把 assets 外的文件发出来了');
@@ -97,7 +115,7 @@ function request(port, method, route, body) {
     // 6. 未知接口要报错，而不是悄悄回一个空响应让页面以为成功。
     assert.match(JSON.parse((await request(port, 'POST', '/__nope', {})).text).error, /未知的预览接口/);
 
-    console.log('PASS 预览服务：起服务先重打包、注入不改盘、页面引用全部可取、仅 HTTPS 出站、secrets/plain 分间并落盘、目录不逃逸、未知接口报错');
+    console.log('PASS 预览服务：起服务先重打包、注入不改盘、页面引用全部可取、仅 HTTPS 出站、secrets/plain 分间并落盘、登录窗带参数并异步回包（夹具/取消都带地址）、目录不逃逸、未知接口报错');
   } finally {
     stop();
   }
