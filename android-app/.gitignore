@@ -1,0 +1,8 @@
+build/
+*.keystore
+*.jks
+*.p12
+*.password
+*.apk
+# 由 tools/bundle.cjs 从 cloudsave-windows/ 生成，不入库以免和源文件漂移
+assets/www/cloudsave-modules.js

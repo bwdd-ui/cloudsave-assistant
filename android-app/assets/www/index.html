@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>云存助手</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="boot-error" class="boot-error" hidden></div>
+
+<header>
+  <div class="title">云存助手 <span class="tag">手机独立版</span></div>
+  <div class="account">115：<b id="account" class="warn">未登录</b>
+    <button id="login" class="small">登录</button>
+    <button id="logout" class="small" hidden>退出</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button id="tab-library" class="tab">资源库</button>
+  <button id="tab-transfer" class="tab">转存</button>
+</nav>
+
+<main>
+<div id="panel-library">
+  <section class="card">
+    <h2>资源库 <span class="free">不需要网盘登录</span></h2>
+    <p class="hint">这里浏览的是资源网站本身的列表与种子，和网盘登录无关；解析用的是桌面端同一份站点代码。
+      个别站点自己要求人机验证或站点账号，验证/登录都在应用内的那个网页里完成，凭据只存在这台手机上、按站点分开存。</p>
+    <div class="row-line">
+      <label class="pick">站点 <select id="lib-site"></select></label>
+      <label class="pick">分类 <select id="lib-category"></select></label>
+    </div>
+    <!-- 筛选行由资源库脚本按站点现搭：七味多「语言」，聚影多「标签」和「资源类型」。 -->
+    <div id="lib-filters" class="row-line"></div>
+    <div class="row-line">
+      <input id="lib-search" type="search" placeholder="搜索片名（改完自动查）" autocomplete="off" spellcheck="false">
+      <button id="lib-go">重新加载</button>
+    </div>
+    <div class="row-line">
+      <button id="lib-verify" class="ghost small" hidden></button>
+      <span id="lib-gate-state" class="hint"></span>
+    </div>
+    <p id="lib-status" class="summary"></p>
+    <div id="lib-items" class="grid"></div>
+    <div class="pager">
+      <button id="lib-prev" class="small">上一页</button>
+      <span id="lib-page"></span>
+      <button id="lib-next" class="small">下一页</button>
+    </div>
+  </section>
+
+  <section id="lib-detail" class="card" hidden>
+    <h2 id="lib-detail-title"></h2>
+    <p id="lib-detail-meta" class="hint"></p>
+    <h3>种子 / 磁力</h3>
+    <div id="lib-seeds"></div>
+    <h3 id="lib-clouds-title" hidden>网盘链接</h3>
+    <div id="lib-clouds"></div>
+    <button id="lib-detail-close" class="ghost">返回资源库</button>
+  </section>
+</div>
+
+<div id="panel-transfer" hidden>
+  <section class="card">
+    <h2>1. 登录 115</h2>
+    <p class="hint">只有转存需要这一步。点「登录」会打开 115 的网页，扫码或输入账号密码登录成功后返回即可，凭据从系统 WebView 里读取，只存在这台手机上。</p>
+    <button id="paste-toggle" class="ghost">改用手动粘贴 Cookie</button>
+    <div id="paste-box" hidden>
+      <textarea id="cookie" rows="3" placeholder="UID=…; CID=…; SEID=…" autocapitalize="off" autocomplete="off" spellcheck="false"></textarea>
+      <button id="paste-save">使用这段 Cookie</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. 保存目录</h2>
+    <p class="hint">转存目标：<b id="folder-name" class="warn">未选择</b></p>
+    <button id="browse">选择目录</button>
+    <div id="folder-panel" class="panel" hidden>
+      <div class="trail-row"><span id="trail"></span><button id="close-folders" class="small right">关闭</button></div>
+      <div id="folder-list"></div>
+      <button id="pick-folder">保存到这一层</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>3. 转存分享</h2>
+    <input id="link" type="url" inputmode="url" placeholder="https://115.com/s/xxxxxx" autocomplete="off" spellcheck="false">
+    <input id="code" maxlength="4" placeholder="提取码（可留空）" autocomplete="off" spellcheck="false">
+    <div class="actions">
+      <button id="scan">扫描分享</button>
+      <button id="transfer">转存到所选目录</button>
+    </div>
+    <p id="summary" class="summary"></p>
+    <label class="check"><input id="verify" type="checkbox" checked><span>转存后逐项核验目标目录（更稳，但每个目录要多等一秒）</span></label>
+    <div class="status-row"><span id="busy" class="busy"></span><button id="cancel" class="small right" hidden>取消</button></div>
+    <p class="hint">这一版只做到「分享链接 → 转存」。磁力离线下载、其它网盘、监控任务还只在桌面端有。</p>
+  </section>
+</div>
+
+  <section class="card">
+    <h2>运行日志 <button id="clear-log" class="small right">清空</button></h2>
+    <div id="log" class="log"></div>
+  </section>
+
+  <footer id="about"></footer>
+</main>
+
+<script src="cloudsave-modules.js"></script>
+<script src="host.js"></script>
+<script src="shell.js"></script>
+<script src="app.js"></script>
+<script src="library.js"></script>
+</body>
+</html>

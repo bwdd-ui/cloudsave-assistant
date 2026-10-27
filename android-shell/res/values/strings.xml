@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only the strings the manifest needs. The interface text lives in the activities because the
+         views are built in code and there is no generated R class in this Gradle-free build. -->
+    <string name="app_name">云存助手</string>
+    <string name="settings_title">地址设置</string>
+</resources>

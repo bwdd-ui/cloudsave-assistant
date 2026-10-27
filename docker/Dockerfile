@@ -28,7 +28,8 @@ ENV CLOUDSAVE_STORAGE_ROOT=/config \
     WEB_AUTHENTICATION_USERNAME=admin \
     WEB_FILE_MANAGER=1 WEB_FILE_MANAGER_ALLOWED_PATHS=/output \
     WEB_TERMINAL=0 VNC_LISTENING_PORT=-1 \
-    DISPLAY_WIDTH=1600 DISPLAY_HEIGHT=1000 TZ=Asia/Shanghai
+    DISPLAY_WIDTH=1600 DISPLAY_HEIGHT=1000 TZ=Asia/Shanghai \
+    CLOUDSAVE_MOBILE_LAYOUT=0
 LABEL org.opencontainers.image.title="云存助手 Docker x86-64" \
       org.opencontainers.image.source="https://github.com/bwdd-ui/cloudsave-assistant"
 VOLUME ["/config", "/output"]

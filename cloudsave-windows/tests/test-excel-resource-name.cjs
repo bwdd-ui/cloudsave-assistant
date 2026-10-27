@@ -9,5 +9,8 @@ assert.equal(tools.rowValues({media:{filename:'Fallback.mkv'}})[4],'Fallback.mkv
 const main=fs.readFileSync(require('path').join(__dirname,'../main.js'),'utf8');
 assert(main.includes('const headers=[...tools.HEADERS];'));
 assert(main.includes('const values=rows.map(item=>tools.rowValues(item.exportRecord));'));
-fs.writeFileSync('C:/Temp/resource-name-export-test.xlsx',tools.buildXlsx([row]));
-console.log('PASS all 12 export headers and values match requested order; magnet title takes priority over media filename; actual workbook generated');
+const exported=require('path').join(require('os').tmpdir(),'resource-name-export-test.xlsx');
+fs.writeFileSync(exported,tools.buildXlsx([row]));
+assert.equal(fs.readFileSync(exported).readUInt32LE(0),0x04034b50);
+fs.unlinkSync(exported);
+console.log('PASS all 12 export headers and values match requested order; magnet title takes priority over media filename; actual workbook generated in the temp directory');

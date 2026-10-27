@@ -8,6 +8,7 @@ const turn = () => new Promise(resolve => setImmediate(resolve));
 (async () => {
   let handler, finish, saves = 0, quits = 0, errors = 0, closes = 0;
   let failure = false;
+  const logs = [];
   const module = { close() { closes++; if (failure) throw Error('cleanup failed'); } };
   const context = {
     app: { on(name, callback) { assert.equal(name, 'before-quit'); handler = callback; }, quit() { quits++; const e = event(); handler(e); assert.equal(e.prevented, 0); } },
@@ -24,6 +25,7 @@ const turn = () => new Promise(resolve => setImmediate(resolve));
     monitorRunning: false, btbtlaExportRunning: false, jyingExportRunning: false,
     qmp4ExportRunning: false, guanyingExportRunning: false, placementCheckRunning: false,
     batchSubmitRunning: false, scanExportRunning: false, waitResource: turn,
+    waitForQuitIdle: async () => ({ pending: [], timedOut: false }), appendMonitorLog: (message, level, detail) => logs.push([message, level, detail]),
     clearInterval, clearTimeout
   };
   function event() { return { prevented: 0, preventDefault() { this.prevented++; } }; }
@@ -45,5 +47,12 @@ const turn = () => new Promise(resolve => setImmediate(resolve));
   assert.equal(errors, 2); assert.equal(saves, 1); assert.equal(quits, 0);
   context.jsonStore.close = async () => { saves++; };
   handler(event()); await turn(); assert.equal(saves, 2); assert.equal(quits, 1);
+
+  // A task that never finishes must not hold quit hostage: the deadline path still flushes and quits.
+  saves = 0; quits = 0; context.waitForQuitIdle = async () => ({ pending: ['七味导出'], timedOut: true });
+  vm.runInNewContext(block, { ...context });
+  handler(event()); await turn();
+  assert.equal(saves, 1); assert.equal(quits, 1);
+  assert.equal(logs.length, 1); assert.match(logs[0][0], /退出等待/); assert.equal(logs[0][1], 'warning'); assert.equal(logs[0][2], '七味导出');
   console.log('PASS actual shutdown handler coalesces repeated quits and permits retry after cleanup/write failure');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -86,15 +86,16 @@ function zip(files) {
   const directory = Buffer.concat(central); const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50); end.writeUInt16LE(Object.keys(files).length, 8); end.writeUInt16LE(Object.keys(files).length, 10); end.writeUInt32LE(directory.length, 12); end.writeUInt32LE(offset, 16);
   return Buffer.concat([...chunks, directory, end]);
 }
+function columnName(index) { let name = ''; for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) name = String.fromCharCode(65 + ((n - 1) % 26)) + name; return name; }
 function buildTableXlsx(headers, rows, widths, sheetName) {
   if (rows.length > 1048575) throw new Error('扫描结果超过Excel单表行数限制');
   const data = [headers, ...rows.map(row => row.map(text))];
-  const lastColumn = String.fromCharCode(64 + headers.length);
+  const lastColumn = columnName(headers.length - 1);
   const sheetRows = data.map((values, index) => {
     const height = index === 0 ? 30 : Math.min(180, Math.max(48, (Math.max(...values.map(v=>String(v).split('\n').length))+1)*15));
     const cells = values.map((value, col) => {
       if (value.length > 32767) throw new Error(`第${index + 1}行${headers[col]}超过Excel单元格长度限制`);
-      return `<c r="${String.fromCharCode(65 + col)}${index + 1}" s="${index === 0 ? 1 : 0}" t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`;
+      return `<c r="${columnName(col)}${index + 1}" s="${index === 0 ? 1 : 0}" t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`;
     }).join('');
     return `<row r="${index + 1}" ht="${height}" customHeight="1">${cells}</row>`;
   }).join('');
@@ -109,4 +110,4 @@ function buildTableXlsx(headers, rows, widths, sheetName) {
   });
 }
 function buildXlsx(rows) { return buildTableXlsx(HEADERS, rows.map(rowValues), [30,18,42,48,70,18,28,18,36,55,24,28], '扫描磁力资源'); }
-module.exports = { HEADERS, MEDIA_KEYS, text, parseMedia, exportRow, rowValues, buildXlsx, buildTableXlsx };
+module.exports = { HEADERS, MEDIA_KEYS, text, parseMedia, exportRow, rowValues, columnName, buildXlsx, buildTableXlsx };

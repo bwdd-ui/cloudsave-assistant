@@ -1,5 +1,6 @@
 module.exports=function setupGuangya(d){
  const {app,BrowserWindow,ipcMain,session,readConfig,writeConfig,encrypt,decrypt,parse,log,stopped}=d;
+ const windowSize=d.windowSize||((width,height)=>({width,height}));
  let window=null;const part=session.fromPartition('persist:cloudsave-guangya');
  const token=()=>{const value=readConfig().guangya?.token;if(!value)throw Error('请先打开光鸭登录窗口完成登录');return decrypt(value);};
  part.webRequest.onBeforeSendHeaders({urls:['https://api.guangyapan.com/*','https://account.guangyapan.com/*']},(details,callback)=>{
@@ -10,7 +11,7 @@ module.exports=function setupGuangya(d){
  async function request(url,body,access){const response=await fetch(url,{method:body===null?'GET':'POST',headers:{Authorization:'Bearer '+access,'Content-Type':'application/json',Referer:'https://www.guangyapan.com/'},...(body===null?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(30000)});if(response.status===401||response.status===403)throw Error('光鸭登录失效，请重新打开光鸭登录');if(!response.ok)throw Error('光鸭接口访问失败（HTTP '+response.status+'）');const text=await response.text();try{return parse(text);}catch{throw Error('光鸭接口返回格式异常');}}
  const provider=new (require('./guangya-provider').GuangyaProvider)({request}),service=new (require('./guangya-offline').GuangyaOffline)({readConfig,writeConfig:async c=>{writeConfig(c);await d.flush();},token,provider,stopped,log});
  ipcMain.handle('guangya-state',()=>service.state());
- ipcMain.handle('guangya-login',async()=>{if(window&&!window.isDestroyed()){window.show();window.focus();return {opened:true};}window=new BrowserWindow({width:1100,height:820,title:'光鸭云盘登录与文件夹',webPreferences:{partition:'persist:cloudsave-guangya',contextIsolation:true,nodeIntegration:false,sandbox:true}});window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.on('closed',()=>window=null);await window.loadURL('https://www.guangyapan.com/#/home');return {opened:true};});
+ ipcMain.handle('guangya-login',async()=>{if(window&&!window.isDestroyed()){window.show();window.focus();return {opened:true};}window=new BrowserWindow({...windowSize(1100,820),title:'光鸭云盘登录与文件夹',webPreferences:{partition:'persist:cloudsave-guangya',contextIsolation:true,nodeIntegration:false,sandbox:true}});window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.on('closed',()=>window=null);await window.loadURL('https://www.guangyapan.com/#/home');return {opened:true};});
  ipcMain.handle('guangya-folders',(_e,parent)=>provider.folders(parent,token()));
  ipcMain.handle('guangya-folder',(_e,folder)=>service.setFolder(folder));
  ipcMain.handle('guangya-submit',(_e,url,title)=>service.submit(url,title));

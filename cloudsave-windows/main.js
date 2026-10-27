@@ -10,6 +10,7 @@ const applicationVersion = require('./package.json').version;
 const ownsApplicationLock = require('./startup-instance').acquireInstance(app, dialog, applicationVersion);
 if (!ownsApplicationLock) app.exit(0);
 const { filterRows: filterHistoryExportRows } = require('./history-export');
+const share115Api = require('./share115-api.js');
 const jsonStore = persistentRuntime ? new (require('./buffered-json').BufferedJson)(1200) : null;
 let configCache;
 let configCheckedAt = 0;
@@ -147,7 +148,7 @@ async function scanLocalCloudFallbacks(website,filters,assertActive,onCandidates
     const detail=await fetchMovieDetail(movie.id);assertActive();
     if(movie.mode==='tv')await inspectTelevisionFiles(movie,detail,filters,assertActive);
     const candidates=selectMonitorCandidates(movie.mode,movie,detail,filters).candidates;
-    cloudFallbackChecked.set(retryKey,retryStamp);
+    cloudFallbackChecked.set(retryKey,retryStamp);while(cloudFallbackChecked.size>20000)cloudFallbackChecked.delete(cloudFallbackChecked.keys().next().value);
     if(await onCandidates(candidates,false))break;
   }
 }
@@ -158,7 +159,14 @@ function syncCloudDownloads(force=false,options) {return cloudDownloadCache.sync
 const cloudSubmitSync=new (require('./cloud-submit-sync').CloudSubmitSync)({account:()=>loadCookie().match(/(?:^|;\s*)UID=(\d+)/)?.[1]||'',sync:()=>syncCloudDownloads(true,{checkOldTasks:false}),active:()=>cloudDownloadCache.running,stopped:()=>shuttingDown,setTimer:(fn,ms)=>setTimeout(fn,ms),clearTimer:id=>clearTimeout(id),log:message=>appendMonitorLog(message,'info','','115')});
 
 function readConfig() {
-  if (!jsonStore) { try { return JSON.parse(fs.readFileSync(CONFIG_FILE(), 'utf8')); } catch { return {}; } }
+  if (!jsonStore) {
+    const target = CONFIG_FILE();
+    let raw;
+    try { raw = fs.readFileSync(target, 'utf8'); }
+    catch (error) { if (error.code === 'ENOENT') return {}; throw error; }
+    try { return JSON.parse(raw); }
+    catch (error) { throw new Error('配置文件无法读取，已保留原文件：' + error.message); }
+  }
   const target = CONFIG_FILE();
   if (configCache && Date.now() - configCheckedAt < 1000) return configCache;
   configCheckedAt = Date.now();
@@ -294,10 +302,15 @@ function saveCookie(cookie) {
   config.cookie = encryptSecret(cookie);
   writeConfig(config);
 }
+let plaintextSecretWarned = false;
 function encryptSecret(value) {
   const text = String(value || '');
   if (portableStorage) return portableStorage.encrypt(text);
-  return safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text).toString('base64') : text;
+  if (!safeStorage.isEncryptionAvailable()) {
+    if (!plaintextSecretWarned) { plaintextSecretWarned = true; appendMonitorLog('系统密钥库不可用，本次起登录凭据以明文保存，建议尽快在设置中重新登录', 'warning'); }
+    return text;
+  }
+  return safeStorage.encryptString(text).toString('base64');
 }
 function decryptSecret(value) {
   if (!value) return '';
@@ -339,26 +352,7 @@ function saveSiteSession(token, host = '', cookie = '') {
   return { loggedIn: Boolean(token) };
 }
 
-function normalizeCookie(raw) {
-  let source = String(raw || '').trim().replace(/^cookie\s*:\s*/i, '');
-  if (!source) throw new Error('请粘贴 Cookie');
-  const required = new Set(['UID', 'CID', 'SEID']);
-  const values = new Map();
-  for (const part of source.split(/[;,\r\n]+/)) {
-    const separator = part.indexOf('=');
-    if (separator <= 0) continue;
-    const originalKey = part.slice(0, separator).trim();
-    if (!/^[A-Za-z0-9_.-]+$/.test(originalKey)) continue;
-    const upperKey = originalKey.toUpperCase();
-    const encoded = part.slice(separator + 1).trim();
-    let value = encoded;
-    try { value = decodeURIComponent(encoded.replace(/\+/g, '%2B')); } catch (_) {}
-    value = value.trim();
-    if (value) values.set(upperKey, { key: required.has(upperKey) ? upperKey : originalKey, value });
-  }
-  for (const key of required) if (!values.get(key)?.value) throw new Error(`Cookie 格式不正确，缺少 ${key}，请复制完整 Cookie`);
-  return [...values.values()].map(item => `${item.key}=${item.value}`).join('; ');
-}
+function normalizeCookie(raw) { return share115Api.normalizeCookie(raw); }
 
 function monitorConfig(config = readConfig()) {
   const savedFilters = config.monitor?.filters && typeof config.monitor.filters === 'object' ? config.monitor.filters : {};
@@ -409,7 +403,7 @@ function appendMonitorLog(message, level = 'info', details = '', website = 'buta
   const config = readConfig();
   const state = monitorConfig(config);
   const logs = [...state.logs, entry].slice(-500);
-  try { if(typeof fs.appendFileSync==='function'){const file=monitorLogFile();fs.mkdirSync(path.dirname(file),{recursive:true});fs.appendFileSync(file,JSON.stringify(entry)+'\n','utf8');} } catch(error) { entry.details+=`\n完整日志写入失败：${error.message}`; }
+  try { if(typeof fs.appendFileSync==='function'){const file=monitorLogFile();fs.mkdirSync(path.dirname(file),{recursive:true});fs.appendFileSync(file,JSON.stringify(entry)+'\n','utf8');try{require('./monitor-log-files').retention(fs,file);}catch{ /* 清理是附带工作，失败不影响本条日志 */ }} } catch(error) { entry.details+=`\n完整日志写入失败：${error.message}`; }
   config.monitor = { ...state, logs }; writeConfig(config);
   pushMonitorStatus({ ...state, logs });
 }
@@ -1430,24 +1424,7 @@ async function getSiteCookie(origin = mirrorConfig().current) {
   } catch (_) { return ''; }
 }
 
-function parse115Json(source) {
-  let safe = ''; let index = 0;
-  while (index < source.length) {
-    const char = source[index];
-    if (char === '"') {
-      const start = index++;
-      while (index < source.length) { if (source[index] === '\\') { index += 2; continue; } if (source[index++] === '"') break; }
-      safe += source.slice(start, index); continue;
-    }
-    if (char === '-' || /[0-9]/.test(char)) {
-      const token = source.slice(index).match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/)[0];
-      safe += /^-?\d+$/.test(token) && !Number.isSafeInteger(Number(token)) ? JSON.stringify(token) : token;
-      index += token.length; continue;
-    }
-    safe += char; index++;
-  }
-  return JSON.parse(safe);
-}
+function parse115Json(source) { return share115Api.parse115Json(source); }
 
 async function apiRequest(url, options = {}, cookie = '') {
   if (shuttingDown) throw Object.assign(new Error('软件正在退出，未发起新请求'), { monitorCancelled:true });
@@ -1478,41 +1455,11 @@ async function apiRequest(url, options = {}, cookie = '') {
   try { return /(^|\.)115\.com$/.test(requested.hostname) ? parse115Json(text) : JSON.parse(text); } catch { throw new Error('服务器返回了无法识别的响应'); }
 }
 
-function check115(result) {
-  const ok = result && (result.state === true || result.success === true);
-  if (ok) return;
-  const code = Number(result?.errno ?? result?.errNo ?? result?.code ?? -1);
-  const message = String(result?.error || result?.error_msg || result?.msg || result?.message || '115 请求失败');
-  if ([99, 401, 990001].includes(code) || message.includes('登录')) throw new Error('115 登录已失效，请重新登录');
-  throw new Error(message);
-}
+function check115(result) { share115Api.check115(result); }
 
-function getAccount(cookie) {
-  return apiRequest('https://my.115.com/?ct=ajax&ac=nav', {}, cookie).then(result => {
-    check115(result);
-    const data = result.data || {};
-    const user = data.user_info || data.user || data;
-    const uid = String(user.user_id || user.uid || user.id || (cookie.match(/(?:^|;\s*)UID=(\d+)/) || [])[1] || '');
-    if (!uid) throw new Error('Cookie 中没有有效的 UID，请重新登录 115');
-    return { uid, nickname: String(user.user_name || user.nick_name || user.nickname || user.uname || '115用户') };
-  });
-}
+function getAccount(cookie) { return share115Api.getAccount(apiRequest, cookie); }
 
-function getFolders(cookie, cid = '0') {
-  const params = new URLSearchParams({ cid, aid: '1', o: 'file_name', asc: '1', show_dir: '1', nf: '1', offset: '0', limit: '1000' });
-  return apiRequest(`https://webapi.115.com/files?${params}`, {}, cookie).then(result => {
-    check115(result);
-    const rows = Array.isArray(result.data) ? result.data : (result.data?.list || result.list || []);
-    return rows.map(item => {
-      const hasDirFlag = item.is_dir !== undefined;
-      const isDir = hasDirFlag ? Number(item.is_dir) === 1 : (!item.fid || String(item.fid) === '0') && item.cid;
-      // 115 返回中没有 is_dir 时，cid 是文件夹自身 ID，fid 只是文件条目字段。
-      const returnedCid = String(item.cid ?? '');
-      const folderId = returnedCid && returnedCid !== String(cid) && returnedCid !== '0' ? returnedCid : (item.file_id || item.fid);
-      return isDir ? { cid: String(folderId), name: String(item.n || item.name || item.file_name || ''), parent: cid } : null;
-    }).filter(item => item && item.name && /^\d+$/.test(item.cid) && item.cid !== '0');
-  });
-}
+function getFolders(cookie, cid = '0') { return share115Api.getFolders(apiRequest, cookie, cid); }
 
 function defaultSaveFolder() {
   const folder = readConfig().folder;
@@ -1520,18 +1467,7 @@ function defaultSaveFolder() {
   if (folder.requiresReselect || !/^\d+$/.test(String(folder.cid ?? ''))) throw new Error('保存目录无效或115账户已更换，请重新选择默认目录');
   return { ...folder, cid: String(folder.cid), name: String(folder.name || folder.cid) };
 }
-async function validateSaveFolder(cookie, folder, uid) {
-  if (folder.uid && String(folder.uid) !== String(uid)) throw new Error('115账户与保存目录不匹配，请重新选择目录');
-  if (!/^\d+$/.test(String(folder.cid ?? ''))) throw new Error('保存目录ID无效，请重新选择目录');
-  if (String(folder.cid) === '0') return { cid: '0', name: '根目录', uid: String(uid) };
-  const params = new URLSearchParams({ cid: String(folder.cid), aid: '1', offset: '0', limit: '1', show_dir: '1' });
-  const result = await apiRequest(`https://webapi.115.com/files?${params}`, {}, cookie); check115(result);
-  const path = Array.isArray(result.path) ? result.path : result.data?.path;
-  const last = Array.isArray(path) ? path[path.length - 1] : null;
-  const actualCid = last ? String(last.cid ?? last.file_id ?? last.id ?? '') : String(result.cid ?? result.data?.cid ?? '');
-  if (actualCid !== String(folder.cid)) throw new Error('115未确认所选目录，目录可能已删除或ID错误，请重新读取并选择文件夹');
-  return { cid: actualCid, name: String(last?.name || last?.n || folder.name || actualCid), uid: String(uid) };
-}
+async function validateSaveFolder(cookie, folder, uid) { return share115Api.validateSaveFolder(apiRequest, cookie, folder, uid); }
 function responseAccepted(result) {
   const value = result?.state ?? result?.success;
   return value === true || value === 1 || value === '1' || value === 'success';
@@ -1610,7 +1546,9 @@ function updateSubmissionPlacement(entry, status, message) {
 }
 function savePendingOffline(entry) {
   const config = readConfig();
-  config.offlinePlacementPending = [...(config.offlinePlacementPending || []).filter(item => !(item.uid === entry.uid && magnetKey(item.url) === magnetKey(entry.url))), entry];
+  // Entries whose 115 task disappeared server-side are re-queued by every repair pass, so the list
+  // needs a ceiling; config.json is rewritten on each append.
+  config.offlinePlacementPending = [...(config.offlinePlacementPending || []).filter(item => !(item.uid === entry.uid && magnetKey(item.url) === magnetKey(entry.url))), entry].slice(-1000);
   writeConfig(config);
 }
 function removePendingOffline(entry) {
@@ -1895,7 +1833,7 @@ function repairCachedOfflinePlacements(){
     const config=readConfig(),resolved=config.offlinePlacementResolved||{},queue=(config.offlinePlacementPending||[]).filter(x=>!resolved[x.uid+'|'+magnetKey(x.url)]),known=new Set(queue.map(x=>x.uid+'|'+magnetKey(x.url)));
     // Recover locally recorded submissions from versions that did not enqueue directory verification.
     for(const row of resourceDatabase().history){const key=row.uid+'|'+magnetKey(row.url);if(row.uid!==uid||row.status!=='pending'||!/^\d+$/.test(row.cid)||row.cid==='0'||known.has(key)||resolved[key])continue;queue.push({id:crypto.randomUUID(),historyId:row.id,url:row.url,uid,cid:row.cid,name:row.folderName||row.cid,taskHash:offlineHash(row.url),createdAt:row.time,nextCheckAt:0});known.add(key);}
-    config.offlinePlacementPending=queue;writeConfig(config);
+    config.offlinePlacementPending=queue.slice(-1000);writeConfig(config);
     const snapshot=new Map(cloudDownloadCache.snapshot(uid).map(x=>[x.key,x])),eligible=queue.filter(x=>x.uid===uid&&(!x.nextCheckAt||x.nextCheckAt<=Date.now()));
     const start=eligible.length?cachedPlacementCursor%eligible.length:0;let directReads=0;
     for(let n=0;n<Math.min(20,eligible.length);n++){
@@ -2075,6 +2013,8 @@ function scheduleMonitor() {
 }
 
 let mainWindow;
+let mainWindowLayout = { mobile: false, displayWidth: 0, displayHeight: 0 };
+const loginWindowSize = (width, height) => require('./mobile-layout').contentWindowSize({ ...mainWindowLayout, width, height });
 function configureChineseMenu(){
   if(!Menu)return;
   Menu.setApplicationMenu(Menu.buildFromTemplate([
@@ -2085,12 +2025,29 @@ function configureChineseMenu(){
   ]));
 }
 function createWindow() {
-  configureChineseMenu();
-  mainWindow = new BrowserWindow({ width: 1440, height: 920, minWidth: 1100, minHeight: 700, backgroundColor: '#f5f7fb', webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling:false } });
+  const { screen } = require('electron');
+  const workArea = screen.getPrimaryDisplay().workAreaSize;
+  const profile = require('./mobile-layout').windowProfile({ displayWidth: workArea.width, displayHeight: workArea.height, force: process.env.CLOUDSAVE_MOBILE_LAYOUT === '1' });
+  mainWindowLayout = { mobile: profile.mobile, displayWidth: workArea.width, displayHeight: workArea.height };
+  // A 420px-wide desktop cannot show the Chinese menu bar without stealing the row the app needs.
+  if (profile.mobile) Menu.setApplicationMenu(null); else configureChineseMenu();
+  mainWindow = new BrowserWindow({ width: profile.width, height: profile.height, minWidth: profile.minWidth, minHeight: profile.minHeight, backgroundColor: '#f5f7fb', webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling:false } });
+  if (profile.fill) mainWindow.maximize();
   backgroundWindow=require('./background-window').installBackgroundWindow({app,win:mainWindow,Tray,Menu,nativeImage,isQuitting:()=>quittingAfterFlush,read:()=>readConfig().windowBehavior || {},write:value=>{const config=readConfig();config.windowBehavior=value;writeConfig(config);}});
   mainWindow.loadFile(path.join(__dirname, 'index.html')).catch(error => dialog.showErrorBox('界面加载失败', '请检查程序文件是否完整。\n' + error.message));
+  // Only this window carries the preload bridge, so it must stay inside the application files; links are handed to the system browser instead.
+  const appRootUrl = pathToFileURL(`${__dirname}${path.sep}`).href;
+  mainWindow.webContents.on('will-navigate', (event, target) => { if (!target.startsWith(appRootUrl)) event.preventDefault(); });
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url).catch(() => {}); return { action: 'deny' }; });
   mainWindow.on('closed',()=>{if(process.platform!=='darwin')app.quit();});
 }
+
+// Every privileged channel is reached only through preload.js, which Electron attaches to the main window alone.
+// Installing the sender check here keeps it ahead of the first registration below.
+const { pathToFileURL } = require('url');
+const { createSenderChecker, installIpcGuard } = require('./ipc-guard');
+const { waitForQuitIdle } = require('./quit-wait');
+installIpcGuard(ipcMain, createSenderChecker(__dirname), (channel, event) => appendMonitorLog('已拒绝来自应用界面之外的调用', 'warning', `${channel} · ${event?.senderFrame?.url || '未知来源'}`));
 
 ipcMain.handle('runtime-version', () => applicationVersion);
 ipcMain.handle('background-settings',(_event,value)=>backgroundWindow?.settings(value) || {closeToTray:true,minimizeToTray:false,trayAvailable:false});
@@ -2142,7 +2099,7 @@ ipcMain.handle('guanying-login-window', async () => {
   if (guanyingLoginWindow && !guanyingLoginWindow.isDestroyed()) { guanyingLoginWindow.focus(); return guanyingLoginResult; }
   await restoreGuanyingSession();
   const webSession=session.fromPartition('persist:cloudsave-guanying');
-  const win = new BrowserWindow({ width: 1050, height: 800, title: '登录观影', webPreferences: { partition: 'persist:cloudsave-guanying', contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+  const win = new BrowserWindow({ ...loginWindowSize(1050, 800), title: '登录观影', webPreferences: { partition: 'persist:cloudsave-guanying', contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false } });
   guanyingLoginWindow = win;
   let closing = false, accessReady=false;
   const capture = async () => {
@@ -2178,11 +2135,12 @@ function captureGuanyingMagnets(movie,detail,filters,snapshot,mode){
   }
   snapshot.rows=[...rows.values()];writeResourceDatabase(database);
 }
+const snapshotStore = require('./snapshot-store');
 const guanyingMonitor=new (require('./guanying-monitor').GuanyingMonitor)({
   readConfig,writeConfig,provider:getGuanyingProvider,uid:()=>readConfig().monitorAccountUid || '',sessionStamp:()=>readConfig().guanyingSession?.savedAt || '',cookie:loadCookie,account:getAccount,bindAccount:bindMonitorAccount,syncDownloads:syncCloudDownloads,scanFallbacks:(filters,active,onCandidates,categories)=>scanLocalCloudFallbacks('guanying',filters,active,onCandidates,categories),validateFolder:validateSaveFolder,folder:defaultSaveFolder,shuttingDown:()=>shuttingDown,
   select:selectMonitorCandidates,inspectFiles:inspectTelevisionFiles,seen:monitorSeenKeys,submit:submitMagnet,remember:saveMonitorMovieBest,capture:captureGuanyingMagnets,
-  readSnapshot:()=>{if(!fs.existsSync(GUANYING_EXPORT_FILE()))return {signature:'',rows:[],complete:false};return JSON.parse(fs.readFileSync(GUANYING_EXPORT_FILE(),'utf8'));},
-  writeSnapshot:value=>{if(jsonStore)jsonStore.set(GUANYING_EXPORT_FILE(),value);else{fs.writeFileSync(GUANYING_EXPORT_FILE()+'.tmp',JSON.stringify(value));fs.renameSync(GUANYING_EXPORT_FILE()+'.tmp',GUANYING_EXPORT_FILE());}},
+  readSnapshot:()=>snapshotStore.readSnapshot(fs,GUANYING_EXPORT_FILE(),message=>appendMonitorLog('观影扫描结果不可用，本轮按空结果重新扫描','warning',message,'guanying')),
+  writeSnapshot:value=>{if(jsonStore)jsonStore.set(GUANYING_EXPORT_FILE(),value);else snapshotStore.writeSnapshot(fs,GUANYING_EXPORT_FILE(),value);},
   log:(message,level='info',details='')=>appendMonitorLog(message,level,details,'guanying'),publish:state=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('guanying-monitor-status',state);}
 });
 ipcMain.handle('guanying-monitor-state',()=>guanyingMonitor.state());
@@ -2216,8 +2174,8 @@ const btbtlaMonitor=new (require('./guanying-monitor').GuanyingMonitor)({
   provider:getBtbtlaProvider,uid:()=>readConfig().monitorAccountUid || '',sessionStamp:()=>'',cookie:loadCookie,account:getAccount,bindAccount:bindMonitorAccount,syncDownloads:syncCloudDownloads,
   scanFallbacks:(filters,active,submit,categories)=>scanLocalCloudFallbacks('btbtla',filters,active,submit,categories),validateFolder:validateSaveFolder,folder:defaultSaveFolder,shuttingDown:()=>shuttingDown,
   select:selectMonitorCandidates,inspectFiles:inspectTelevisionFiles,seen:monitorSeenKeys,submit:submitMagnet,remember:saveMonitorMovieBest,capture:captureGuanyingMagnets,
-  readSnapshot:()=>{if(!fs.existsSync(BTBTLA_EXPORT_FILE()))return {signature:'',rows:[],complete:false};return JSON.parse(fs.readFileSync(BTBTLA_EXPORT_FILE(),'utf8'));},
-  writeSnapshot:value=>{if(jsonStore)jsonStore.set(BTBTLA_EXPORT_FILE(),value);else fs.writeFileSync(BTBTLA_EXPORT_FILE(),JSON.stringify(value));},
+  readSnapshot:()=>snapshotStore.readSnapshot(fs,BTBTLA_EXPORT_FILE(),message=>appendMonitorLog('BT影视扫描结果不可用，本轮按空结果重新扫描','warning',message,'btbtla')),
+  writeSnapshot:value=>{if(jsonStore)jsonStore.set(BTBTLA_EXPORT_FILE(),value);else snapshotStore.writeSnapshot(fs,BTBTLA_EXPORT_FILE(),value);},
   log:(m,l='info',d='')=>appendMonitorLog(m,l,d,'btbtla'),publish:state=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('btbtla-monitor-status',state);}
 });
 ipcMain.handle('btbtla-catalog',(_e,category,page,filters)=>browseCache.get('btbtla',[category,Number(page)||1,filters || {}],()=>getBtbtlaProvider().catalog(category,Number(page)||1,filters)));
@@ -2242,7 +2200,7 @@ async function captureJyingSession(win){
 }
 ipcMain.handle('jying-login-window',async()=>{
  if(jyingLoginWindow&&!jyingLoginWindow.isDestroyed()){jyingLoginWindow.focus();return jyingLoginWindow._result;}
- await restoreJyingSession();const win=new BrowserWindow({width:1050,height:800,title:'聚影账号设置（登录后自动保存）',webPreferences:{partition:'persist:cloudsave-jying',contextIsolation:true,nodeIntegration:false}});jyingLoginWindow=win;let closing=false,loggedIn=false;
+ await restoreJyingSession();const win=new BrowserWindow({...loginWindowSize(1050,800),title:'聚影账号设置（登录后自动保存）',webPreferences:{partition:'persist:cloudsave-jying',contextIsolation:true,nodeIntegration:false,sandbox:true}});jyingLoginWindow=win;let closing=false,loggedIn=false;
  win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',(event,target)=>{try{if(!['https://jying.top','https://www.jying.top'].includes(new URL(target).origin))event.preventDefault();}catch(_){event.preventDefault();}});
  const capture=()=>captureJyingSession(win).then(ok=>{loggedIn=ok;}).catch(()=>{});win.webContents.on('did-finish-load',capture);const timer=setInterval(capture,2000);
  win._result=new Promise(resolve=>{win.on('close',event=>{if(closing)return;event.preventDefault();closing=true;clearInterval(timer);capture().finally(()=>{if(!win.isDestroyed())win.destroy();});});win.on('closed',()=>{clearInterval(timer);jyingLoginWindow=null;resolve({loggedIn});});});win.loadURL('https://jying.top/login').catch(error=>appendMonitorLog('聚影登录窗口加载失败','warning',error.message,'jying'));return win._result;
@@ -2253,7 +2211,7 @@ function getQmp4Provider(){return qmp4Provider ||=new (require('./qmp4-provider'
 const qmp4Monitor=new (require('./guanying-monitor').GuanyingMonitor)({website:'qmp4',label:'七味',namespace:'qm5:',categories:['mv','tv','ac','variety','short'],mode:category=>category==='mv'?'movie':'tv',nativeOptions:options=>options,
   filters:options=>require('./guanying-monitor').legacyFilters(options),catalogPath:require('./qmp4-provider').catalogPath,
   readConfig:()=>{const c=readConfig();return {...c,guanyingMonitor:c.qmp4Monitor,guanyingScan:c.qmp4Scan};},writeConfig:value=>{const c=readConfig();c.qmp4Monitor=value.guanyingMonitor;if(value.guanyingScan)c.qmp4Scan=value.guanyingScan;else delete c.qmp4Scan;writeConfig(c);},provider:getQmp4Provider,uid:()=>readConfig().monitorAccountUid || '',sessionStamp:()=>'',cookie:loadCookie,account:getAccount,bindAccount:bindMonitorAccount,syncDownloads:syncCloudDownloads,scanFallbacks:(f,a,s,c)=>scanLocalCloudFallbacks('qmp4',f,a,s,c),validateFolder:validateSaveFolder,folder:defaultSaveFolder,shuttingDown:()=>shuttingDown,select:selectMonitorCandidates,inspectFiles:inspectTelevisionFiles,seen:monitorSeenKeys,submit:submitMagnet,remember:saveMonitorMovieBest,capture:captureGuanyingMagnets,
-  readSnapshot:()=>fs.existsSync(QMP4_EXPORT_FILE())?JSON.parse(fs.readFileSync(QMP4_EXPORT_FILE(),'utf8')):{signature:'',rows:[],complete:false},writeSnapshot:value=>{if(jsonStore)jsonStore.set(QMP4_EXPORT_FILE(),value);else fs.writeFileSync(QMP4_EXPORT_FILE(),JSON.stringify(value));},log:(m,l='info',d='')=>appendMonitorLog(m,l,d,'qmp4'),publish:state=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('qmp4-monitor-status',state);}
+  readSnapshot:()=>snapshotStore.readSnapshot(fs,QMP4_EXPORT_FILE(),message=>appendMonitorLog('七味扫描结果不可用，本轮按空结果重新扫描','warning',message,'qmp4')),writeSnapshot:value=>{if(jsonStore)jsonStore.set(QMP4_EXPORT_FILE(),value);else snapshotStore.writeSnapshot(fs,QMP4_EXPORT_FILE(),value);},log:(m,l='info',d='')=>appendMonitorLog(m,l,d,'qmp4'),publish:state=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('qmp4-monitor-status',state);}
 });
 ipcMain.handle('qmp4-catalog',(_e,category,page,filters)=>browseCache.get('qmp4',[category,Number(page)||1,filters || {}],()=>getQmp4Provider().catalog(category,Number(page)||1,filters)));
 ipcMain.handle('qmp4-detail',async(_e,id,fresh)=>{const raw=await getQmp4Provider().detail(id,{fresh});return {...normalizeCloudDetail(raw),resourceAccessRequired:raw.resourceAccessRequired,resourceMessage:raw.resourceMessage,unavailableResourceCount:raw.unavailableResourceCount};});
@@ -2262,7 +2220,7 @@ ipcMain.handle('qmp4-export',async()=>{if(qmp4ExportRunning)throw Error('七味�
 const jyingMonitor=new (require('./guanying-monitor').GuanyingMonitor)({website:'jying',label:'聚影',namespace:'jy4:',categories:['mv','tv','ac','doc','variety','bundle','other'],mode:category=>['mv','doc','bundle','other'].includes(category)?'movie':'tv',nativeOptions:options=>({...options,res:options.onlyCloud?'115':options.res || 'MagnetLink'}),
   filters:async options=>{const f=require('./guanying-monitor').legacyFilters(options);f.genres=[];f.tags=[];if(options.genre||options.tag){const choices=await getJyingProvider().filters();if(options.genre){const x=choices.genre.find(x=>x.value===options.genre);if(!x)throw Object.assign(Error('聚影类型筛选已变更，请重新选择'),{filterRejected:true});f.genres=[x.label];}if(options.tag){const x=choices.tag.find(x=>x.value===options.tag);if(!x)throw Object.assign(Error('聚影标签筛选已变更，请重新选择'),{filterRejected:true});f.tags=[x.label];}}return f;},catalogPath:(category,page,options)=>'/api/app/movies/?'+new URLSearchParams(require('./jying-provider').catalogParams(category,page,options)),
   readConfig:()=>{const c=readConfig();return {...c,guanyingMonitor:c.jyingMonitor,guanyingScan:c.jyingScan};},writeConfig:value=>{const c=readConfig();c.jyingMonitor=value.guanyingMonitor;if(value.guanyingScan)c.jyingScan=value.guanyingScan;else delete c.jyingScan;writeConfig(c);},provider:getJyingProvider,uid:()=>readConfig().monitorAccountUid || '',sessionStamp:()=>readConfig().jyingSession?.savedAt || '',cookie:loadCookie,account:getAccount,bindAccount:bindMonitorAccount,syncDownloads:syncCloudDownloads,scanFallbacks:(f,a,s,c)=>scanLocalCloudFallbacks('jying',f,a,s,c),validateFolder:validateSaveFolder,folder:defaultSaveFolder,shuttingDown:()=>shuttingDown,select:selectMonitorCandidates,inspectFiles:inspectTelevisionFiles,seen:monitorSeenKeys,submit:submitMagnet,remember:saveMonitorMovieBest,capture:captureGuanyingMagnets,
-  readSnapshot:()=>fs.existsSync(JYING_EXPORT_FILE())?JSON.parse(fs.readFileSync(JYING_EXPORT_FILE(),'utf8')):{signature:'',rows:[],complete:false},writeSnapshot:value=>{if(jsonStore)jsonStore.set(JYING_EXPORT_FILE(),value);else fs.writeFileSync(JYING_EXPORT_FILE(),JSON.stringify(value));},log:(m,l='info',d='')=>appendMonitorLog(m,l,d,'jying'),publish:state=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('jying-monitor-status',state);}
+  readSnapshot:()=>snapshotStore.readSnapshot(fs,JYING_EXPORT_FILE(),message=>appendMonitorLog('聚影扫描结果不可用，本轮按空结果重新扫描','warning',message,'jying')),writeSnapshot:value=>{if(jsonStore)jsonStore.set(JYING_EXPORT_FILE(),value);else snapshotStore.writeSnapshot(fs,JYING_EXPORT_FILE(),value);},log:(m,l='info',d='')=>appendMonitorLog(m,l,d,'jying'),publish:state=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('jying-monitor-status',state);}
 });
 ipcMain.handle('jying-catalog',(_e,category,page,filters)=>browseCache.get('jying',[category,Number(page)||1,filters || {}],()=>getJyingProvider().catalog(category,Number(page)||1,filters)));
 ipcMain.handle('jying-detail',async(_e,id,fresh)=>{const raw=await getJyingProvider().detail(id,{fresh,allowLocked:true});return {...normalizeCloudDetail(raw),resourceAccessRequired:raw.resourceAccessRequired,resourceMessage:raw.resourceMessage,unavailableResourceCount:raw.unavailableResourceCount};});
@@ -2276,7 +2234,7 @@ ipcMain.handle('open-original', async (_event, raw) => {
 ipcMain.handle('site-login-window', () => {
   if (siteLoginWindow && !siteLoginWindow.isDestroyed()) { siteLoginWindow.focus(); return siteLoginResult; }
   const origin = mirrorConfig().current;
-  const win = new BrowserWindow({ width: 1050, height: 800, title: '登录不太灵', webPreferences: { partition: 'persist:cloudsave', contextIsolation: true, nodeIntegration: false } });
+  const win = new BrowserWindow({ ...loginWindowSize(1050, 800), title: '登录不太灵', webPreferences: { partition: 'persist:cloudsave', contextIsolation: true, nodeIntegration: false, sandbox: true } });
   siteLoginWindow = win;
   let closing = false;
   const capture = async () => {
@@ -2356,11 +2314,11 @@ ipcMain.handle('validate-cookie', async (_event, raw) => {
   return account;
 });
 ipcMain.handle('login-window', async () => {
-  const win = new BrowserWindow({ width: 1100, height: 800, title: '登录 115', webPreferences: { contextIsolation: true, nodeIntegration: false } });
+  const win = new BrowserWindow({ ...loginWindowSize(1100, 800), title: '登录 115', webPreferences: { partition: 'persist:cloudsave-115', contextIsolation: true, nodeIntegration: false, sandbox: true } });
   await win.loadURL('https://115.com/');
   return new Promise(resolve => {
     win.on('closed', async () => {
-      const cookies = await session.defaultSession.cookies.get({});
+      const cookies = await session.fromPartition('persist:cloudsave-115').cookies.get({});
       const wanted = new Set(['UID', 'CID', 'SEID', 'KID']);
       const values = new Map();
       for (const cookie of cookies) if (wanted.has(cookie.name) && /(^|\.)115\.com$/.test(cookie.domain.replace(/^\./, ''))) values.set(cookie.name, cookie.value);
@@ -2519,7 +2477,7 @@ ipcMain.handle('logout', () => { const config = readConfig(); delete config.cook
 if (!ownsApplicationLock) app.quit();
 else {
   app.on('second-instance', () => { if (mainWindow && !mainWindow.isDestroyed()) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); } });
-  app.whenReady().then(() => { if (portableStorage) { const config = readConfig(); const migration = portableStorage.migrate(config); if (migration.changed) writeConfig(config); if (migration.failed) appendMonitorLog('部分旧登录凭据无法迁移，请在原电脑首次运行便携版后再搬移', 'warning'); } pan123Monitor=require('./pan123-main')({app,BrowserWindow,ipcMain,session,read:()=>readLocalCache('pan123-monitor.json'),write:data=>{const file=localCacheFile('pan123-monitor.json');fs.mkdirSync(path.dirname(file),{recursive:true});const fd=fs.openSync(file+'.tmp','w');try{fs.writeFileSync(fd,JSON.stringify(data),'utf8');fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(file+'.tmp',file);},readConfig,writeConfig,encrypt:encryptSecret,decrypt:decryptSecret,notify:(channel,value)=>{for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed())w.webContents.send(channel,value);},log:appendMonitorLog}); multiCloudModule=require('./multi-cloud-main')({BrowserWindow,ipcMain,session,readConfig,writeConfig,encrypt:encryptSecret,decrypt:decryptSecret,pan123:()=>pan123Monitor});setupShare115Monitor();for(const monitor of [guanyingMonitor,btbtlaMonitor,jyingMonitor,qmp4Monitor])monitor.d.magnetEnabled=()=>libraryMagnetEnabled(monitor.website); guangyaModule=require('./guangya-main')({app,BrowserWindow,ipcMain,session,readConfig,writeConfig,encrypt:encryptSecret,decrypt:decryptSecret,parse:parse115Json,flush:async()=>{if(jsonStore)await jsonStore.flush();},stopped:()=>shuttingDown,log:(message,level)=>appendMonitorLog(message,level,'','guangya')}); createWindow(); lifecycleTimers.push(setTimeout(syncCloudDownloads,15000)); lifecycleTimers.push(setInterval(syncCloudDownloads,60000));lifecycleTimers.push(setTimeout(repairCachedOfflinePlacements,20000));lifecycleTimers.push(setInterval(repairCachedOfflinePlacements,120000)); scheduleMonitor();qmp4Monitor.schedule();if(qmp4Monitor.state().enabled)lifecycleTimers.push(setTimeout(()=>qmp4Monitor.run(false),150000));jyingMonitor.schedule();if(jyingMonitor.state().enabled)lifecycleTimers.push(setTimeout(()=>jyingMonitor.run(false),120000));btbtlaMonitor.schedule();if(btbtlaMonitor.state().enabled)lifecycleTimers.push(setTimeout(()=>btbtlaMonitor.run(false),90000)); guanyingMonitor.schedule(); if(guanyingMonitor.state().enabled)lifecycleTimers.push(setTimeout(()=>guanyingMonitor.run(false),60000)); if (monitorConfig().enabled) lifecycleTimers.push(setTimeout(() => runMonitor(false), 30000)); });
+  app.whenReady().then(() => { if (portableStorage) { const config = readConfig(); const migration = portableStorage.migrate(config); if (migration.changed) writeConfig(config); if (migration.failed) appendMonitorLog('部分旧登录凭据无法迁移，请在原电脑首次运行便携版后再搬移', 'warning'); } pan123Monitor=require('./pan123-main')({app,BrowserWindow,ipcMain,session,read:()=>readLocalCache('pan123-monitor.json'),write:data=>{const file=localCacheFile('pan123-monitor.json');fs.mkdirSync(path.dirname(file),{recursive:true});const fd=fs.openSync(file+'.tmp','w');try{fs.writeFileSync(fd,JSON.stringify(data),'utf8');fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(file+'.tmp',file);},readConfig,writeConfig,encrypt:encryptSecret,decrypt:decryptSecret,notify:(channel,value)=>{for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed())w.webContents.send(channel,value);},log:appendMonitorLog,windowSize:loginWindowSize}); multiCloudModule=require('./multi-cloud-main')({BrowserWindow,ipcMain,session,readConfig,writeConfig,encrypt:encryptSecret,decrypt:decryptSecret,pan123:()=>pan123Monitor});setupShare115Monitor();for(const monitor of [guanyingMonitor,btbtlaMonitor,jyingMonitor,qmp4Monitor])monitor.d.magnetEnabled=()=>libraryMagnetEnabled(monitor.website); guangyaModule=require('./guangya-main')({app,BrowserWindow,ipcMain,session,readConfig,writeConfig,encrypt:encryptSecret,decrypt:decryptSecret,parse:parse115Json,flush:async()=>{if(jsonStore)await jsonStore.flush();},stopped:()=>shuttingDown,log:(message,level)=>appendMonitorLog(message,level,'','guangya'),windowSize:loginWindowSize}); createWindow(); lifecycleTimers.push(setTimeout(syncCloudDownloads,15000)); lifecycleTimers.push(setInterval(syncCloudDownloads,60000));lifecycleTimers.push(setTimeout(repairCachedOfflinePlacements,20000));lifecycleTimers.push(setInterval(repairCachedOfflinePlacements,120000)); scheduleMonitor();qmp4Monitor.schedule();if(qmp4Monitor.state().enabled)lifecycleTimers.push(setTimeout(()=>qmp4Monitor.run(false),150000));jyingMonitor.schedule();if(jyingMonitor.state().enabled)lifecycleTimers.push(setTimeout(()=>jyingMonitor.run(false),120000));btbtlaMonitor.schedule();if(btbtlaMonitor.state().enabled)lifecycleTimers.push(setTimeout(()=>btbtlaMonitor.run(false),90000)); guanyingMonitor.schedule(); if(guanyingMonitor.state().enabled)lifecycleTimers.push(setTimeout(()=>guanyingMonitor.run(false),60000)); if (monitorConfig().enabled) lifecycleTimers.push(setTimeout(() => runMonitor(false), 30000)); });
 }
 let quittingAfterFlush = false, quitFlushInFlight = false;
 if (jsonStore) app.on('before-quit', event => {
@@ -2533,7 +2491,13 @@ if (jsonStore) app.on('before-quit', event => {
   for (const timer of lifecycleTimers) { clearInterval(timer); clearTimeout(timer); }
   if (monitorPushTimer) { clearTimeout(monitorPushTimer); monitorPushTimer = null; }
     await Promise.allSettled([offlineOperationQueue, metadataQueue, cloudDownloadCache.running, cloudSubmitSync.running, pan123Monitor?.running,share115Monitor?.running,guangyaModule?.running, guanyingSessionManager?.close()]);
-    while (monitorRunning || guanyingMonitor.running || btbtlaMonitor.running || btbtlaExportRunning || jyingMonitor.running || jyingExportRunning || qmp4Monitor.running || qmp4ExportRunning || guanyingExportRunning || placementCheckRunning || batchSubmitRunning || scanExportRunning) await waitResource(25);
+    const quitWait = await waitForQuitIdle([
+      ['不太灵监控', () => monitorRunning], ['观影监控', () => guanyingMonitor.running], ['BT影视监控', () => btbtlaMonitor.running],
+      ['聚影监控', () => jyingMonitor.running], ['七味监控', () => qmp4Monitor.running],
+      ['观影导出', () => guanyingExportRunning], ['BT影视导出', () => btbtlaExportRunning], ['聚影导出', () => jyingExportRunning], ['七味导出', () => qmp4ExportRunning],
+      ['保存位置核查', () => placementCheckRunning], ['批量离线提交', () => batchSubmitRunning], ['扫描结果导出', () => scanExportRunning],
+    ], { wait: waitResource });
+    if (quitWait.timedOut) appendMonitorLog('退出等待超过 20 秒，未结束的任务已放弃等待，按已保存的数据退出', 'warning', quitWait.pending.join('、'));
     await jsonStore.close();
   })().then(() => { quittingAfterFlush = true; app.quit(); }).catch(error => { quitFlushInFlight = false; dialog.showErrorBox('数据保存失败，尚未退出', error.message + '\n请检查磁盘空间后重试，避免丢失记录。'); });
 });
@@ -2542,7 +2506,7 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 
 let haisouView;ipcMain.handle('haisou-view',(_event,value={})=>{if(!mainWindow||mainWindow.isDestroyed())return;if(!value.visible){haisouView?.setVisible(false);return;}if(!haisouView){require('./remote-page').configureRemotePageSession(session.fromPartition('persist:cloudsave-haisou'));haisouView=new WebContentsView({webPreferences:{partition:'persist:cloudsave-haisou',contextIsolation:true,nodeIntegration:false,sandbox:true}});mainWindow.contentView.addChildView(haisouView);haisouView.webContents.setWindowOpenHandler(({url})=>{if(/^https?:\/\//.test(url))shell.openExternal(url);return {action:'deny'};});haisouView.webContents.loadURL('https://haisou.cc/').catch(e=>appendMonitorLog('海搜页面加载失败','warning',e.message,'haiso'));}const zoom=mainWindow.webContents.getZoomFactor(),bounds=mainWindow.getContentBounds(),rect=value.rect || {};const x=Math.max(0,Math.round((Number(rect.x)||0)*zoom)),y=Math.max(0,Math.round((Number(rect.y)||0)*zoom));haisouView.setBounds({x,y,width:Math.max(1,Math.min(bounds.width-x,Math.round((Number(rect.width)||1)*zoom))),height:Math.max(1,Math.min(bounds.height-y,Math.round((Number(rect.height)||1)*zoom)))});haisouView.setVisible(true);if(value.reload)haisouView.webContents.reload();return true;});
 
-let qmp4VerificationWindow;ipcMain.handle('qmp4-verification-window',async()=>{if(qmp4VerificationWindow&&!qmp4VerificationWindow.isDestroyed()){qmp4VerificationWindow.focus();return qmp4VerificationWindow._result;}require('./remote-page').configureRemotePageSession(session.fromPartition('persist:cloudsave-qmp4'),{host:'www.qmp4.com',preferNative:true});const win=new BrowserWindow({width:1050,height:800,title:'七味网站验证（完成后关闭窗口）',webPreferences:{partition:'persist:cloudsave-qmp4',nodeIntegration:false,contextIsolation:true,sandbox:true}});qmp4VerificationWindow=win;win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('https://www.qmp4.com/'))event.preventDefault();});win._result=new Promise(resolve=>win.on('closed',()=>{qmp4VerificationWindow=null;resolve({closed:true});}));win.loadURL(getQmp4Provider().verificationUrl || 'https://www.qmp4.com/').catch(e=>appendMonitorLog('七味验证窗口加载失败','warning',e.message,'qmp4'));return win._result;});
+let qmp4VerificationWindow;ipcMain.handle('qmp4-verification-window',async()=>{if(qmp4VerificationWindow&&!qmp4VerificationWindow.isDestroyed()){qmp4VerificationWindow.focus();return qmp4VerificationWindow._result;}require('./remote-page').configureRemotePageSession(session.fromPartition('persist:cloudsave-qmp4'),{host:'www.qmp4.com',preferNative:true});const win=new BrowserWindow({...loginWindowSize(1050,800),title:'七味网站验证（完成后关闭窗口）',webPreferences:{partition:'persist:cloudsave-qmp4',nodeIntegration:false,contextIsolation:true,sandbox:true}});qmp4VerificationWindow=win;win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('https://www.qmp4.com/'))event.preventDefault();});win._result=new Promise(resolve=>win.on('closed',()=>{qmp4VerificationWindow=null;resolve({closed:true});}));win.loadURL(getQmp4Provider().verificationUrl || 'https://www.qmp4.com/').catch(e=>appendMonitorLog('七味验证窗口加载失败','warning',e.message,'qmp4'));return win._result;});
 
 function detailSiteProvider(site){if(site==='btbtla')return getBtbtlaProvider();if(site==='jying')return getJyingProvider();if(site==='qmp4')return getQmp4Provider();throw Error('资源网站无效');}
 ipcMain.handle('site-detail-summary',async(_event,site,id,fresh)=>{const provider=detailSiteProvider(site);return normalizeMovie(await (provider.summary?provider.summary(id,{fresh:Boolean(fresh)}):provider.detail(id,{fresh:Boolean(fresh)})));});

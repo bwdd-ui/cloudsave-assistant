@@ -1,6 +1,6 @@
 'use strict';
 const {Pan123Provider}=require('./pan123-provider');const {Pan123Monitor}=require('./pan123-monitor');
-module.exports=function setup({app,BrowserWindow,ipcMain,session,read,write,readConfig,writeConfig,encrypt,decrypt,notify,log}){
+module.exports=function setup({app,BrowserWindow,ipcMain,session,read,write,readConfig,writeConfig,encrypt,decrypt,notify,log,windowSize=(width,height)=>({width,height})}){
  let win=null,attached=false;const partition=()=>session.fromPartition('persist:cloudsave-123pan');
  const auth=()=>{const c=readConfig().pan123Session||{};return {token:decrypt(c.token)||'',loginUuid:decrypt(c.loginUuid)||''};};
  const provider=new Pan123Provider({auth,fetch:(...args)=>partition().fetch(...args)});
@@ -17,7 +17,7 @@ module.exports=function setup({app,BrowserWindow,ipcMain,session,read,write,read
   const token=unwrap(values.token);if(typeof token==='string'&&token.length>20)persistAuth(token,String(uuid||''));
  }
  ipcMain.handle('pan123-login',async()=>{await app.whenReady();attach();if(win&&!win.isDestroyed()){win.show();win.focus();return {opened:true};}
-  win=new BrowserWindow({width:1150,height:820,title:'123云盘登录',webPreferences:{partition:'persist:cloudsave-123pan',contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
+  win=new BrowserWindow({...windowSize(1150,820),title:'123云盘登录',webPreferences:{partition:'persist:cloudsave-123pan',contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('did-finish-load',()=>capture().catch(()=>{}));
   win.on('close',event=>{if(win?._captured)return;event.preventDefault();const closing=win;capture().catch(()=>{}).finally(()=>{if(!closing.isDestroyed()){closing._captured=true;closing.close();}});});
   win.on('closed',()=>{win=null;notify('pan123-status',monitor.state());});

@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict'),{pendingQuitTasks,waitForQuitIdle,QUIT_WAIT_DEADLINE_MS}=require('../quit-wait');
+const never=()=>true;
+assert.equal(pendingQuitTasks([['空闲',()=>false],['忙',()=>1]]).join(), '忙');
+assert.equal(QUIT_WAIT_DEADLINE_MS,20000);
+(async()=>{
+  let clock=1000,calls=0,busy=true;
+  const now=()=>clock;
+  const wait=async(ms)=>{clock+=ms;if(++calls===3)busy=false;};
+  const idle=await waitForQuitIdle([['扫描结果导出',()=>busy]],{wait,now});
+  assert.deepEqual(idle,{pending:[],timedOut:false});
+  assert.equal(calls,3);assert.equal(clock,1075);
+  const stuck=await waitForQuitIdle([['七味导出',never],['批量离线提交',()=>false],['不太灵监控',never]],{wait,now});
+  assert.equal(stuck.timedOut,true);
+  assert.deepEqual(stuck.pending,['七味导出','不太灵监控']);
+  assert.equal(clock-1075,QUIT_WAIT_DEADLINE_MS);
+  const before=clock;
+  assert.deepEqual(await waitForQuitIdle([],{wait,now}),{pending:[],timedOut:false});
+  assert.equal(clock,before);
+  console.log('PASS quit waits poll until every task clears and give up at the deadline instead of hanging the shutdown forever');
+})().catch(error=>{console.error(error);process.exitCode=1;});

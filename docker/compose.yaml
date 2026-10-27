@@ -18,6 +18,8 @@ services:
       VNC_LISTENING_PORT: "-1"
       DISPLAY_WIDTH: ${DISPLAY_WIDTH:-1600}
       DISPLAY_HEIGHT: ${DISPLAY_HEIGHT:-1000}
+      # 手机竖屏方案见 docker/MOBILE.md：把显示区改成 420x900 并把这里设为 1。
+      CLOUDSAVE_MOBILE_LAYOUT: ${CLOUDSAVE_MOBILE_LAYOUT:-0}
     volumes:
       - ./config:/config
       - ./output:/output

@@ -1,0 +1,108 @@
+/*
+  Mobile profile: the container streams this same Electron window to a phone browser, so the only
+  difference from the desktop is a narrow virtual display. These rules take over below 900px and
+  rebuild the layout for a thumb at 560px and under (the recommended portrait display width is 420).
+  Linked last so it wins over codex-theme.css and ui-polish.css at equal specificity.
+*/
+
+/* Narrow windows still keep the left sidebar, but every control grows to a touchable size. */
+@media (max-width:900px){
+  .btn,.nav-btn,.cloud-module-tab,.cloud-pan-tab,.cloud-mode,.cloud-latest-mode,.cloud-detail-tab{min-height:44px}
+  .input,select.input,input[type=search]{min-height:44px;font-size:15px}
+  .cloud-module-tabs,.cloud-library-modes,.cloud-pan-tabs,.cloud-latest-modes,.cloud-detail-subtabs{overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap;scrollbar-width:thin}
+  .cloud-module-tabs>button,.cloud-library-modes>button,.cloud-pan-tabs>button,.cloud-latest-modes>button,.cloud-detail-subtabs>button{flex:0 0 auto}
+  .cloud-module-tab,.cloud-pan-tab{min-width:0;padding:12px 18px}
+  .library-display-controls{justify-content:center}
+}
+
+@media (max-width:560px){
+  body{flex-direction:column;overflow:hidden}
+  .side,body.sidebar-collapsed .side{width:auto;flex:0 0 auto;flex-basis:auto;border-right:0;border-bottom:1px solid var(--wx-line);padding:6px 8px;gap:6px;overflow:visible}
+  .sidebar-head,body.sidebar-collapsed .sidebar-head{display:none}
+  .side-nav,body.sidebar-collapsed .side-nav{flex-direction:row;align-items:stretch;margin:0;gap:4px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding-bottom:2px}
+  .nav-btn,body.sidebar-collapsed .nav-btn{flex:0 0 auto;width:auto;justify-content:flex-start;gap:7px;padding:8px 12px;font-size:13px;white-space:nowrap}
+  body.sidebar-collapsed .nav-label{display:inline}
+  .nav-icon,body.sidebar-collapsed .nav-icon{width:20px;height:20px;flex:0 0 20px}
+  .nav-icon svg{width:15px;height:15px}
+  .side>.status,body.sidebar-collapsed .side>.status{display:block;min-height:0;max-height:3.2em;overflow:auto;font-size:12px;line-height:1.35;padding-top:2px;border-top:1px solid var(--wx-line)}
+  .side>.log,body.sidebar-collapsed .side>.log{display:none}
+  .main{flex:1 1 auto;min-height:0}
+
+  .cloud-home-page,.settings-page,.filter-page,.offline-tasks-page,.third-site-page,#guanyingLibraryPage,#guanyingMonitorPage{padding:10px}
+  .log-page{padding:0 10px 10px}
+  .log-shell{padding-top:10px;gap:10px}
+  .log-heading,.settings-heading strong,.filter-page-head strong{font-size:18px}
+  .card,.settings-grid .card,.cloud-settings-card,.cloud-detail-pane{padding:13px}
+  .cloud-module-head,.cloud-home-hero{padding:14px;gap:10px;flex-direction:column;align-items:flex-start}
+  .cloud-home-title{font-size:21px;letter-spacing:0}
+  .cloud-version{padding:5px 10px;font-size:12px}
+
+  .cloud-library-toolbar{flex-wrap:wrap;padding:10px}
+  .cloud-search{flex:1 1 100%}
+  .cloud-library-toolbar>.btn{flex:1 1 auto}
+  .cloud-library-toolbar .btn,.cloud-search .btn{min-width:88px}
+  .library-display-controls label{width:100%;justify-content:space-between}
+  .library-display-controls input{flex:1;width:auto}
+  .cloud-poster-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px}
+  .cloud-poster-title{font-size:13px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .cloud-pagination{gap:8px;padding:14px 0}
+  .cloud-pagination .btn{flex:1 1 40%}
+  .cloud-pagination #cloudJumpPage{width:70px;flex:0 0 auto}
+
+  .cloud-filter-overlay,.cloud-seed-overlay{padding:0;align-items:flex-end}
+  .cloud-filter-dialog,.cloud-seed-dialog,.native-library-filter .cloud-filter-dialog{width:100%;max-width:none;border-radius:16px 16px 0 0;max-height:90vh}
+  .cloud-filter-head,.cloud-seed-head{padding:12px 14px;position:sticky;top:0;background:#fff;z-index:1}
+  .cloud-filter-head strong,.cloud-seed-head strong{font-size:17px}
+  .cloud-filter-scroll{padding:2px 14px 10px;-webkit-overflow-scrolling:touch}
+  .cloud-filter-foot{position:sticky;bottom:0;padding:10px 14px;background:#fff}
+  .cloud-filter-chip,.filter-chip{min-height:40px;padding:9px 14px;font-size:14px}
+  .native-library-filter .cloud-filter-group{grid-template-columns:1fr;gap:8px}
+  .native-extra-filters{flex-direction:column;align-items:flex-start;gap:10px;padding:12px 0}
+  .cloud-seed-section{padding:12px 14px}
+  .cloud-seed-section dl{grid-template-columns:1fr;gap:2px;margin-bottom:10px}
+  .cloud-detail-primary-tabs{flex-direction:column;gap:8px}
+  .cloud-detail-primary{min-height:48px}
+  .cloud-detail-summary{flex-direction:column;gap:12px}
+  .cloud-detail-poster{width:110px}
+  .cloud-detail-info h2{font-size:18px}
+
+  .log-toolbar{flex-wrap:wrap;gap:8px;padding:10px}
+  .log-toolbar label{flex:1 1 46%;min-width:0}
+  .log-toolbar .input{width:100%;min-width:0}
+  .log-toolbar .btn{flex:1 1 46%;font-size:14px;padding:10px 12px}
+  .log-toolbar .sub{display:block;font-size:11px}
+  #logFilterStatus{flex:1 1 100%;font-size:11px}
+  .log-list{padding:0 4px}
+  .log-row{grid-template-columns:1fr auto;gap:4px;padding:8px 6px;font-size:12px}
+  .log-icon{display:none}
+  .new-log{right:10px;bottom:10px;padding:9px 14px;font-size:13px}
+  .history-list{max-height:200px}
+  .history-row{grid-template-columns:1fr;gap:2px}
+
+  .filter-panel{padding:12px 14px;border-radius:12px}
+  .filter-line,.filter-bottom{flex-wrap:wrap;gap:8px;padding:10px 0}
+  .filter-line>b,.filter-bottom>b{flex-basis:100%;width:auto;flex:0 0 100%;font-size:14px}
+  .filter-custom{min-height:40px}
+  .filter-apply{flex:1 1 100%;margin-left:0}
+
+  .submission-link-row,.submission-row-head{flex-direction:column;align-items:flex-start;gap:6px}
+  .submission-link-row code,.submission-row-head time{width:100%;margin-left:0}
+  .offline-history-row,.site-resource-row.cloud-resource-item{grid-template-columns:minmax(0,1fr);gap:8px;padding:12px}
+  .site-resource-actions{grid-column:1;justify-content:flex-start;width:100%}
+  .site-resource-actions .btn{flex:1 1 auto;min-width:0}
+  .site-resource-tools{flex-direction:column;align-items:stretch}
+  .site-quality-tabs,.site-resource-search{min-width:0;max-width:none;width:100%}
+  .gy-filter-controls label{flex:1 1 100%;min-width:0}
+  .workspace-bar{padding:8px 10px;gap:8px}
+  .workspace-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .workspace-actions .btn{padding:9px 6px}
+  .monitor-top-actions{flex-wrap:wrap}
+  .monitor-inline>.row .btn{flex:1 1 auto}
+  .cloud-settings-grid,.settings-grid,.cloud-home-grid{grid-template-columns:1fr}
+}
+
+/* Landscape phones and small tablets keep the top-bar shape only until the sidebar fits again. */
+@media (max-width:560px) and (orientation:landscape){
+  .side>.status{max-height:2em}
+  .cloud-poster-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}

@@ -59,6 +59,13 @@ node tests/run-tests.cjs
 
 测试使用模拟数据；部分 Electron UI 测试要求 Windows 图形环境和可写的 `C:\Temp`。请勿以真实账号测试代替模拟测试，避免意外提交资源。
 
+## 手机端
+
+仓库里有两个互不依赖的 Android 工程，都不走 Gradle，构建只要 Android SDK + JDK：
+
+- [`android-app`](android-app/README.md)：**独立版 apk**，界面和 115 站点逻辑都在包里，不需要 NAS 常开。站点模块由 `android-app/tools/bundle.cjs` 从 `cloudsave-windows/` 原文内联，与桌面端同一份代码。
+- [`android-shell`](android-shell/README.md)：**套壳 apk**，全屏 WebView 指向 NAS 上 Docker 容器的 HTTPS 地址，功能全部仍在容器里跑。
+
 ## 开发资料
 
 - [Windows 1.2.75 115保存确认状态修复](cloudsave-windows/RELEASE-1.2.75.md)
