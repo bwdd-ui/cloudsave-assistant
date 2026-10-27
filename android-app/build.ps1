@@ -123,7 +123,10 @@ Checked 'zipalign'
 # 6. sign
 $out = Join-Path $build "CloudSave-Standalone-$version.apk"
 if ($Release) {
-  $ksPath = Join-Path $root $Keystore
+  # An absolute -Keystore stays as given: the reproduction check builds from a second
+  # checkout and the key must not be copied next to a throwaway tree. Join-Path would
+  # glue a rooted path onto $root.
+  $ksPath = if ([System.IO.Path]::IsPathRooted($Keystore)) { $Keystore } else { Join-Path $root $Keystore }
   if (-not (Test-Path $ksPath)) { throw "release keystore missing: $ksPath (keep it off the network, see README.md)" }
   if (-not $KeystorePass) { throw 'pass -KeystorePass, or build without -Release for a debug-signed apk' }
   & (Join-Path $bt 'apksigner.bat') sign --ks $ksPath --ks-key-alias cloudsave-standalone `
